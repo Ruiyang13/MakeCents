@@ -1,0 +1,54 @@
+extends layout
+
+block content
+  section.hero
+    .container
+      .row.align-items-center.g-5
+        .col-lg-6
+          span.eyebrow= t('Personal finance, with an AI that asks first')
+          h1.display-title.mt-3
+            = t('Plan with')
+            br
+            em= t('clarity.')
+          p.lede.mt-4= t("PlanSmart reads your transactions, explains where the money goes, proposes budgets that fit your real life, and warns you before you overspend. It never changes anything without your say-so, and it can't move money.")
+          .d-flex.gap-2.mt-4.flex-wrap
+            a.btn.btn-danger.btn-lg.px-4(href='/signup')= t('Get started')
+            a.btn.btn-ghost.btn-lg.px-4(href='/login')= t('Sign in')
+        .col-lg-6
+          //- Cubist composition: tilted planes at different depths. Figures are illustrative.
+          .cubist-stage(aria-hidden='true')
+            .stage-inner
+              svg.shard(viewBox='0 0 600 460', preserveAspectRatio='none', style='transform: translateZ(-120px)')
+                polygon(points='40,60 380,10 330,300 0,340', style='fill: var(--ochre)', opacity='.55')
+                polygon(points='250,90 590,130 520,420 200,380', style='fill: var(--crimson)', opacity='.75')
+                polygon(points='120,260 420,220 460,450 80,440', style='fill: var(--slate)', opacity='.7')
+                polygon(points='400,0 600,40 560,190', style='fill: var(--ink)', opacity='.8')
+              .tile(style='left: 6%; top: 10%; width: 52%; transform: translateZ(60px)')
+                .label= t('Dining out · September')
+                .big.num £312
+                .small.muted
+                  span.up ▲ 18%
+                  |
+                  | #{ t('vs your 3-month average') }
+              .tile(style='right: 4%; top: 36%; width: 50%; transform: translateZ(120px)')
+                .label= t('Needs your approval')
+                .fw-bold.mt-1= t('Set Dining out budget → £240/month')
+                .d-flex.gap-2.mt-2
+                  span.btn.btn-danger.btn-sm= t('Confirm')
+                  span.btn.btn-ghost.btn-sm= t('Reject')
+              .tile(style='left: 12%; bottom: 6%; width: 58%; transform: translateZ(30px)')
+                .label.mb-2= t('Daily spending')
+                .d-flex.gap-1
+                  each l in [1, 0, 2, 3, 1, 5, 2, 0, 1, 4, 2, 1, 3, 0, 2, 1]
+                    span.hm-key(class=l ? '' : 'zero', style=`--t: ${l / 5}`)
+
+  section.pb-5
+    .container
+      .row.g-4
+        each f, i in features
+          .col-sm-6.col-lg-3
+            .plane.feature
+              .icon(class=`tone-${i}`)
+                i.fas(class=f.icon)
+              h3= t(f.title)
+              p.small.muted.mb-0= t(f.text)

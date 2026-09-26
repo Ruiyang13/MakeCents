@@ -1,0 +1,6 @@
+each cls, type in { errors: 'danger', info: 'primary', success: 'success' }
+  if messages && messages[type]
+    .alert.alert-dismissible(class=`alert-${cls}`, role='alert')
+      each m in messages[type]
+        div= m.msg
+      button.btn-close(type='button', data-bs-dismiss='alert', aria-label='Close')

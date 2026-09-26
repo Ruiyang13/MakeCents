@@ -1,0 +1,4 @@
+# The Pug plugin rewrites some valid templates into invalid Pug (multi-line each arrays, glued text),
+# so templates are formatted by hand.
+views/
+node_modules/

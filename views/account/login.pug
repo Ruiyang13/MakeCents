@@ -1,0 +1,32 @@
+extends ../layout
+
+block content
+  .container.auth-wrap
+    .auth-card
+      .plane.stacked.faceted.p-4.p-md-5
+        span.eyebrow= t('Welcome back')
+        h1.h2.mt-2.mb-4= t('Sign in')
+        form(method='POST', action='/login')
+          input(type='hidden', name='_csrf', value=_csrf)
+          .mb-3
+            label.form-label(for='email')= t('Email')
+            input#email.form-control(type='email', name='email', autocomplete='email', required, autofocus)
+          .mb-4
+            label.form-label(for='password')= t('Password')
+            input#password.form-control(type='password', name='password', autocomplete='current-password', required)
+          button.btn.btn-danger.btn-lg.w-100(type='submit')= t('Sign in')
+        p.mt-4.mb-0.small.muted
+          | #{ t('New here?') }
+          a.ms-1.fw-bold(href='/signup')= t('Create an account')
+      if demoHint
+        .plane.p-3.mt-4.small
+          .eyebrow.mb-2= t('Demo accounts')
+          div
+            code maria.demo@fintechathon.test
+          div
+            code jason.demo@fintechathon.test
+          div
+            code okafor.demo@fintechathon.test
+          .muted.mt-1
+            | #{ t('Password') }
+            code.ms-1 fintech1234

@@ -1,0 +1,82 @@
+extends ../layout
+
+block content
+  .container.pb-5
+    .page-head.d-flex.justify-content-between.align-items-end.flex-wrap.gap-4
+      div
+        span.eyebrow= t('Monthly budgets · 每月预算')
+        h1= t('Your budgets')
+      if summary
+        .kpis
+          .kpi
+            .label= t('Budgeted / month')
+            .value.num= money(summary.total)
+          .kpi
+            .label= t('Spent in {month}', { month: monthName })
+            .value.num= money(summary.used)
+          .kpi
+            .label= summary.left >= 0 ? t('Left · {perDay} a day for {n} days', { perDay: money(summary.perDay), n: summary.daysLeft }) : t('Over budget')
+            .value.num(style=summary.left < 0 ? 'color: var(--crimson)' : undefined)= money(Math.abs(summary.left))
+
+    form#budgets-form.plane.stacked(method='POST', action='/finance/budgets/all', autocomplete='off')
+      input(type='hidden', name='_csrf', value=_csrf)
+      .plane-head
+        h2= t('Budget per category')
+        .d-flex.gap-2.flex-wrap
+          //- Fills every empty box with the category's usual monthly spend (last 3 full months)
+          button#fill-usual.btn.btn-ghost.btn-sm(type='button')
+            i.fas.fa-wand-magic-sparkles.me-2
+            = t('Use my usual for empty ones')
+          button.btn.btn-danger.btn-sm(type='submit')
+            i.fas.fa-check.me-2
+            = t('Save all budgets')
+      .table-responsive
+        table.budget-table
+          thead
+            tr
+              th= t('Category')
+              th.col-num= t('Spent in {month}', { month: monthName })
+              th.col-num= t('Usual / month')
+              th.col-num= t('Monthly budget')
+              th.progress-col= t('Progress')
+          tbody
+            each l, i in lines
+              - const name = lang === 'zh' ? l.zh : l.label;
+              tr
+                td
+                  .d-flex.align-items-center.gap-2
+                    span.rec-glyph.sm(class=`tone-${i % 5}`)
+                      i.fas(class=l.icon)
+                    b= name
+                td.col-num.num= money(l.month)
+                td.col-num.num.muted= l.usual ? money(l.usual) : '—'
+                td.col-num
+                  label.budget-input
+                    span.cur= currencySymbol
+                    input(
+                      type='text',
+                      inputmode='decimal',
+                      name=`b_${l.key}`,
+                      value=l.limit != null ? String(l.limit) : '',
+                      placeholder=t('No budget'),
+                      pattern='\\d{0,7}(\\.\\d{0,2})?',
+                      data-usual=l.usual || '',
+                      aria-label=t('{cat} monthly budget', { cat: name })
+                    )
+                td.progress-col
+                  if l.limit
+                    span.rec-budget(class=`is-${l.status}`)
+                      span.bar
+                        span.fill(style=`width: ${Math.min(100, l.pct)}%`)
+                      span.txt= l.month > l.limit ? t('{pct}% · {amount} over', { pct: l.pct, amount: money(l.month - l.limit) }) : t('{pct}% · {amount} left', { pct: l.pct, amount: money(l.limit - l.month) })
+                  else
+                    span.small.muted= t('No budget')
+
+block scripts
+  script.
+    // "Use my usual" fills only empty boxes, so budgets you already set are never overwritten.
+    document.getElementById('fill-usual').addEventListener('click', function () {
+      document.querySelectorAll('#budgets-form input[data-usual]').forEach(function (inp) {
+        if (!inp.value.trim() && inp.dataset.usual) inp.value = inp.dataset.usual;
+      });
+    });

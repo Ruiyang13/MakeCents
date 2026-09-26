@@ -1,0 +1,125 @@
+extends ../layout
+
+block content
+  .container.pb-5
+    .page-head.d-flex.justify-content-between.align-items-end.flex-wrap.gap-3
+      div
+        span.eyebrow= t('Card-style bookkeeping · 卡片式记账')
+        h1= t('What did you spend?')
+      if budgetSummary
+        .kpis
+          .kpi
+            .label= t('Budgets this month')
+            .value.num #{ money0(budgetSummary.used) } / #{ money0(budgetSummary.total) }
+
+    .rec-grid
+      each c, i in categories
+        - const main = lang === 'zh' ? c.zh : c.label;
+        - const second = lang === 'zh' ? c.label : c.zh;
+        .rec-item
+          button.rec-card(
+            type='button',
+            class=c.income ? 'income' : '',
+            data-key=c.key,
+            data-label=main,
+            data-sub=second,
+            data-icon=c.icon,
+            data-income=c.income ? '1' : '',
+            style=`--i: ${i}`
+          )
+            span.rec-glyph(class=`tone-${i % 5}`)
+              i.fas(class=c.icon)
+            span.rec-label= main
+            span.rec-zh= second
+            span.rec-month.num= c.month ? money(c.month) : '—'
+            //- Budget progress: share of this month's budget already spent
+            if c.limit
+              span.rec-budget(class=`is-${c.status}`, title=t('{spent} of {limit} budget', { spent: money(c.month), limit: money(c.limit) }))
+                span.bar
+                  span.fill(style=`width: ${Math.min(100, c.pct)}%`)
+                span.txt= t('{pct}% of {limit}', { pct: c.pct, limit: money0(c.limit) })
+            else if !c.income
+              span.rec-budget.none= t('No budget')
+    //- Spending history: everything from the last 6 months, newest first, grouped by day
+    section#history.hist
+      .hist-head
+        h2= t('Spending history')
+        .hist-tools
+          label.hist-search
+            i.fas.fa-magnifying-glass(aria-hidden='true')
+            input#hist-search(type='search', placeholder=t('Search merchant, category or amount…'), aria-label=t('Search spending history'), autocomplete='off')
+          .hist-filters(role='group', aria-label=t('Filter'))
+            button.hist-filter.active(type='button', data-filter='all')= t('All')
+            button.hist-filter(type='button', data-filter='fixed')= t('Fixed')
+            button.hist-filter(type='button', data-filter='manual')= t('Added by you')
+            button.hist-filter(type='button', data-filter='scan')= t('Scanned')
+      .plane.stacked.hist-list
+        - const todayKey = new Date().toDateString();
+        - const yesterdayKey = new Date(Date.now() - 864e5).toDateString();
+        each day in historyDays
+          .hist-day
+            .hist-date
+              span= day.date.toDateString() === todayKey ? t('Today') : day.date.toDateString() === yesterdayKey ? t('Yesterday') : day.date.toLocaleDateString(dateLocale, { weekday: 'short', day: 'numeric', month: 'short' })
+              if day.out
+                span.num= t('{amount} out', { amount: money(day.out) })
+            ul
+              each tx in day.items
+                li.hist-row(data-search=`${tx.merchant} ${tx.category} ${cat(tx.category)} ${Math.abs(tx.amount).toFixed(2)}`.toLowerCase(), data-kind=`${tx.fixed ? 'fixed ' : ''}${tx.source}`)
+                  span.rec-glyph.sm(class=`tone-${tx.style.tone}`)
+                    i.fas(class=tx.style.icon)
+                  .hist-main
+                    b= tx.merchant
+                    span.hist-meta
+                      span= cat(tx.category)
+                      if tx.fixed
+                        span.hist-tag.fixed= t('Fixed')
+                      if tx.source === 'manual'
+                        span.hist-tag= t('Added')
+                      if tx.source === 'scan'
+                        span.hist-tag= t('Scanned')
+                      if tx.nextDue
+                        span.hist-tag.due= t('next {date}', { date: new Date(tx.nextDue).toLocaleDateString(dateLocale, { day: 'numeric', month: 'short' }) })
+                      each f in tx.flags
+                        span.hist-tag.warn= f.text
+                  span.hist-amt.num(class=tx.amount > 0 ? 'in' : '') #{ tx.amount > 0 ? '+' : '−' }#{ money(Math.abs(tx.amount)) }
+                  if tx.deletable
+                    form.hist-del(method='POST', action=`/finance/record/${tx.id}/delete`, onsubmit=`return confirm(${JSON.stringify(t('Delete this entry?'))})`)
+                      input(type='hidden', name='_csrf', value=_csrf)
+                      button(type='submit', aria-label=t('Delete {merchant}', { merchant: tx.merchant }), title=t('Delete'))
+                        i.fas.fa-xmark
+        p#hist-empty.hist-empty(hidden)= t('No transactions match your search.')
+      p#hist-count.small.muted.mt-2= t('{n} transactions', { n: historyCount })
+
+block scripts
+  //- Rendered outside <main> (its own stacking context) so the modal sits above Bootstrap's backdrop.
+  #rec-modal.modal.fade(tabindex='-1', aria-labelledby='rec-title', aria-hidden='true')
+    .modal-dialog.modal-dialog-centered
+      .modal-content.rec-sheet
+        form#rec-form(method='POST', action='/finance/record', autocomplete='off')
+          input(type='hidden', name='_csrf', value=_csrf)
+          input#rec-category(type='hidden', name='category')
+          input#rec-amount(type='hidden', name='amount')
+          .rec-sheet-head
+            span#rec-sheet-glyph.rec-glyph
+              i#rec-sheet-icon.fas
+            div
+              h2#rec-title.h5.mb-0
+              span#rec-sub.small.muted
+            button.btn-close.ms-auto(type='button', data-bs-dismiss='modal', aria-label=t('Close'))
+          .rec-display(aria-live='polite')
+            span.cur= currencySymbol
+            span#rec-display.num 0
+          .rec-keypad
+            each k in ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'back']
+              button.rec-key(type='button', data-k=k, aria-label=k === 'back' ? t('Delete digit') : k)
+                if k === 'back'
+                  i.fas.fa-delete-left
+                else
+                  = k
+          #rec-extra.row.g-2.mt-1
+            .col-7
+              input.form-control(type='text', name='note', maxlength='80', placeholder=t('Note, e.g. Mala hotpot'), aria-label=t('Note'))
+            .col-5
+              input.form-control(type='date', name='date', value=today, max=today, aria-label=t('Date'))
+          button#rec-save.btn.btn-danger.btn-lg.w-100.mt-3(type='submit', disabled)= t('Save')
+  script(src=`/js/record.js?v=${v}`)

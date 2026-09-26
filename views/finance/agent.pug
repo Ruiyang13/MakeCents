@@ -1,0 +1,165 @@
+extends ../layout
+
+block content
+  - const hour = new Date().getHours();
+  - const greeting = t(hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening');
+  .container.pb-5
+    .page-head.d-flex.justify-content-between.align-items-end.flex-wrap.gap-4
+      div
+        span.eyebrow= new Date().toLocaleDateString(dateLocale, { weekday: 'long', day: 'numeric', month: 'long' })
+        h1= user.name ? t('{greeting}, {name}.', { greeting, name: user.name.split(' ')[0] }) : t('{greeting}.', { greeting })
+      if heatmap
+        .kpis
+          .kpi
+            .label= t('Everyday · {month}', { month: heatmap.month })
+            .value.num= heatmap.total
+          .kpi
+            .label= t('Fixed costs · {month}', { month: heatmap.month })
+            .value.num= heatmap.fixedTotal
+          if heatmap.peak
+            .kpi
+              .label= t('Biggest everyday day')
+              .value.num= heatmap.peak
+
+    .row.g-4
+      .col-lg-8
+        .plane.faceted.chat
+          .plane-head
+            h2= t('Ask {app}', { app: appName })
+            .d-flex.gap-2
+              //- Past conversations are kept; pick one to reopen and continue it
+              .dropdown
+                button.btn.btn-ghost.btn-sm.dropdown-toggle(type='button', data-bs-toggle='dropdown', aria-expanded='false')
+                  i.fas.fa-clock-rotate-left.me-2
+                  = t('History')
+                ul.dropdown-menu.dropdown-menu-end.chat-history
+                  each th in threads
+                    li
+                      a.dropdown-item(class=th.active ? 'active' : '', href=`/finance?thread=${encodeURIComponent(th.threadId)}`)
+                        span.title= th.title || t('New conversation')
+                        span.when= new Date(th.updatedAt).toLocaleDateString(dateLocale, { day: 'numeric', month: 'short' })
+              form(method='POST', action='/finance/reset')
+                input(type='hidden', name='_csrf', value=_csrf)
+                button.btn.btn-ghost.btn-sm(type='submit')
+                  i.fas.fa-plus.me-2
+                  = t('New chat')
+          #chat-log.chat-log(aria-live='polite', data-thread=threadId)
+            each msg in chatMessages
+              if msg.role === 'user'
+                .msg.user= msg.content
+              else
+                .msg.ai
+                  include ../partials/brand-mark
+                  .bubble.md(data-md=msg.content)= msg.content
+            if !chatMessages.length && !pendingActions.length
+              #welcome.welcome
+                h2= t('What would you like to know?')
+                p.muted= t('Ask in your own words, in English or 中文. A few ideas:')
+                .chips
+                  each q in ['Why was last month so expensive?', 'How much do I spend eating out?', 'Which subscriptions do I pay for?', 'Am I saving anything each month?', 'Set me a realistic eating-out budget', 'Am I on track with my budgets?', '我上个月花最多的是什么？']
+                    button.chip(type='button')= t(q)
+          .composer
+            .composer-box
+              //- + attaches a receipt or payment screenshot; Claude reads it and you review before anything is saved
+              label.attach(for='scan-file', title=t('Upload a receipt or payment screenshot'), aria-label=t('Upload a receipt or payment screenshot'))
+                i.fas.fa-plus
+              input#scan-file.visually-hidden(type='file', accept='image/*')
+              textarea#message-input(rows='1', maxlength='2000', placeholder=t('Ask about your money…'), aria-label=t('Message'))
+              //- Voice input: browser speech recognition fills the box; you still press send
+              button#mic-button.mic(type='button', aria-label=t('Voice input'), title=t('Voice input'), hidden)
+                i.fas.fa-microphone
+              button#send-button.btn.btn-danger.send(type='button', aria-label=t('Send'))
+                i.fas.fa-arrow-up
+
+      .col-lg-4.d-flex.flex-column.gap-4
+        if heatmap
+          //- This month's spending calendar: continuous red scale, hover a day or the gradient for amounts.
+          .plane.faceted.cal-card
+            .plane-head
+              h2= t('Everyday spending · {month}', { month: heatmap.month })
+              span.small.muted.num= heatmap.total
+            .plane-body
+              .cal(
+                role='img',
+                aria-label=t('Daily spending in {month}, {total} in total. Hover a day for its amount.', { month: heatmap.month, total: heatmap.total })
+              )
+                each wd in lang === 'zh' ? ['一', '二', '三', '四', '五', '六', '日'] : ['M', 'T', 'W', 'T', 'F', 'S', 'S']
+                  .cal-wd= wd
+                each week in heatmap.weeks
+                  each cell in week
+                    if !cell
+                      .cal-cell.blank
+                    else
+                      .cal-cell(
+                        class=[cell.spent ? 'spent' : '', cell.future ? 'future' : '', cell.today ? 'today' : '', cell.t > 0.6 ? 'hot' : ''],
+                        style=cell.spent ? `--t: ${cell.t}` : undefined,
+                        data-t=cell.t,
+                        title=cell.label
+                      )= cell.day
+              .hm-legend
+                span.small.muted.num 0
+                #hm-gradient.hm-gradient(data-max=heatmap.max, data-currency=heatmap.currency, aria-label=t('Colour scale: hover to read the amount'))
+                  span.hm-marker
+                  span.hm-tip
+                span.small.muted.num= new Intl.NumberFormat('en-GB', { style: 'currency', currency: heatmap.currency, maximumFractionDigits: 0 }).format(heatmap.max)
+              //- Fixed costs, set apart: not coloured into the calendar
+              if heatmap.fixed.length
+                .fixed-list
+                  .d-flex.justify-content-between.align-items-baseline
+                    b.small= t('FIXED COSTS, SET APART')
+                    span.small.muted.num= heatmap.fixedTotal
+                  ul
+                    each x in heatmap.fixed
+                      li
+                        span.num.muted #{ x.day }
+                        span.who= x.merchant
+                        span.num= x.label
+        .plane.faceted.ochre
+          .plane-head
+            h2= t('Agent activity')
+            span.small.muted
+              span#status-dot.status-dot
+              span#status= t('Ready')
+          .plane-body
+            ol#activity.timeline
+              li.muted= t('No activity yet.')
+
+        .plane.faceted.slate
+          .plane-head
+            h2= t("What it's allowed to do")
+          .plane-body
+            ul.tiers
+              li
+                span.glyph(style='background: var(--sage)')
+                  i.fas.fa-eye
+                span
+                  b= t('Read & analyse')
+                  = t('Runs automatically on your own data.')
+              li
+                span.glyph(style='background: var(--ochre)')
+                  i.fas.fa-hand
+                span
+                  b= t('Record spending & set budgets')
+                  = t('Only proposed. Nothing changes until you confirm.')
+              li
+                span.glyph(style='background: var(--crimson)')
+                  i.fas.fa-ban
+                span
+                  b= t('Move money')
+                  = t('Impossible. The assistant has no such tool.')
+            a.small.fw-bold.d-inline-block.mt-3(href='/finance/audit', target='_blank')
+              = t('View operation log')
+              i.fas.fa-arrow-right.ms-2
+
+  script#pending-data(type='application/json')!= JSON.stringify(pendingActions).replace(/</g, '\\u003c')
+  template#avatar-tpl
+    include ../partials/brand-mark
+
+  script#cat-data(type='application/json')!= JSON.stringify(categories).replace(/</g, '\\u003c')
+
+block scripts
+  //- Outside <main> so the modal sits above Bootstrap's backdrop
+  include ../partials/scan-review
+  script(src='/vendor/marked/marked.umd.js')
+  script(src='/vendor/dompurify/purify.min.js')
+  script(src=`/js/assistant.js?v=${v}`)

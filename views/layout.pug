@@ -1,0 +1,63 @@
+doctype html
+html.h-100(lang=lang)
+  head
+    meta(charset='utf-8')
+    meta(name='viewport', content='width=device-width, initial-scale=1')
+    meta(name='csrf-token', content=_csrf)
+    title #{ t(title) } · #{ appName }
+    link(
+      rel='icon',
+      href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M4 6 22 2 18 20Z" fill="%23b4232a"/><path d="M10 12 28 10 22 30 6 26Z" fill="%2317140f" opacity=".85"/></svg>'
+    )
+    //- Stamp the theme before CSS loads so there is no light flash in dark mode.
+    script.
+      (function () {
+        var t = null;
+        try {
+          t = localStorage.getItem('theme');
+        } catch (e) {}
+        if (t !== 'light' && t !== 'dark') t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-bs-theme', t);
+      })();
+    //- Client-side translations: window.t('English text', { vars }) for strings built in browser scripts
+    script.
+      window.I18N = !{ i18nClient };
+      window.t = function (s, v) {
+        var d = window.I18N[s] || s;
+        return v
+          ? d.replace(/\{(\w+)\}/g, function (m, k) {
+              return v[k] != null ? v[k] : m;
+            })
+          : d;
+      };
+    link(rel='preconnect', href='https://fonts.googleapis.com')
+    link(rel='preconnect', href='https://fonts.gstatic.com', crossorigin)
+    link(
+      rel='stylesheet',
+      href='https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..600&family=Manrope:wght@400..800&display=swap'
+    )
+    link(rel='stylesheet', href='/vendor/bootstrap/css/bootstrap.min.css')
+    link(rel='stylesheet', href='/vendor/fontawesome/css/all.min.css')
+    link(rel='stylesheet', href=`/css/main.css?v=${v}`)
+    block head
+
+  body.d-flex.flex-column.h-100
+    //- Cubist backdrop: overlapping angular planes, purely decorative.
+    .facets(aria-hidden='true')
+      .grain
+      svg(viewBox='0 0 1000 1000')
+        polygon(points='120,180 620,40 540,520 60,600', style='fill: var(--ochre)')
+        polygon(points='420,260 940,300 820,760 360,640', style='fill: var(--crimson)')
+        polygon(points='240,520 700,460 760,940 180,880', style='fill: var(--slate)')
+        polygon(points='600,80 980,160 900,420', style='fill: var(--ink)')
+        polygon(points='40,640 360,600 300,980', style='fill: var(--sage)')
+        polyline(points='120,180 940,300 180,880 620,40', fill='none', style='stroke: var(--ink)', stroke-width='2')
+    include partials/header
+    main.flex-shrink-0
+      .container.mt-3
+        include partials/flash
+      block content
+    include partials/footer
+    script(src='/vendor/bootstrap/js/bootstrap.bundle.min.js')
+    script(src=`/js/theme.js?v=${v}`)
+    block scripts

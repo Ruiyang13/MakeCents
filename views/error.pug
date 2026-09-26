@@ -1,0 +1,8 @@
+extends layout
+
+block content
+  .container.auth-wrap
+    .plane.stacked.faceted.p-5.text-center.auth-card
+      span.eyebrow= title
+      h1.h2.mt-2= message
+      a.btn.btn-ghost.mt-3(href='/')= t('Back home')

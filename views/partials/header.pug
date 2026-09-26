@@ -1,0 +1,47 @@
+nav.topbar.navbar.navbar-expand-md.py-2
+  .container
+    a.brand(href='/')
+      include brand-mark
+      = appName
+    button.navbar-toggler.border-0(
+      type='button',
+      data-bs-toggle='collapse',
+      data-bs-target='#nav',
+      aria-controls='nav',
+      aria-expanded='false',
+      aria-label=t('Toggle navigation')
+    )
+      span.navbar-toggler-icon
+    #nav.collapse.navbar-collapse
+      ul.navbar-nav.ms-4.me-auto
+        if user
+          li.nav-item
+            a.nav-link(class=title === 'Assistant' ? 'active' : '', href='/finance')= t('Assistant')
+          li.nav-item
+            a.nav-link(class=title === 'Insights' ? 'active' : '', href='/finance/bills')= t('Insights')
+          li.nav-item
+            a.nav-link(class=title === 'Record' ? 'active' : '', href='/finance/record')= t('Record')
+          li.nav-item
+            a.nav-link(class=title === 'Budgets' ? 'active' : '', href='/finance/budgets')= t('Budgets')
+          li.nav-item
+            a.nav-link(class=title === 'Goals' ? 'active' : '', href='/finance/goals')= t('Goals')
+          li.nav-item
+            a.nav-link(href='/finance/audit', target='_blank')= t('Operation log')
+      .d-flex.gap-2.align-items-center.py-2.py-md-0
+        //- Language switch: works like the dark-mode toggle (sets a cookie, reloads)
+        button.btn.btn-ghost.btn-sm.px-2.lang-toggle(
+          type='button',
+          data-lang-toggle=lang === 'zh' ? 'en' : 'zh',
+          title=t('Switch language'),
+          aria-label=t('Switch language')
+        )= lang === 'zh' ? 'EN' : '中文'
+        button.btn.btn-ghost.btn-icon(type='button', data-theme-toggle, aria-label=t('Toggle dark mode'), title=t('Toggle dark mode'))
+          i.fas.fa-circle-half-stroke(aria-hidden='true')
+        if user
+          a.btn.btn-ghost.btn-sm.px-3(href='/account')
+            i.fas.fa-user.me-2
+            = user.name || t('Account')
+          a.btn.btn-ghost.btn-sm.px-3(href='/logout')= t('Sign out')
+        else
+          a.btn.btn-ghost.btn-sm.px-3(href='/login')= t('Sign in')
+          a.btn.btn-danger.btn-sm.px-3(href='/signup')= t('Get started')

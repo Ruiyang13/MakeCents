@@ -1,0 +1,51 @@
+extends ../layout
+
+block content
+  .container.pb-5(style='max-width: 640px')
+    .page-head
+      span.eyebrow= t('Settings')
+      h1= t('Your account')
+
+    .plane.faceted.mb-4
+      .plane-head
+        h2= t('Profile')
+      .plane-body
+        form(method='POST', action='/account/profile')
+          input(type='hidden', name='_csrf', value=_csrf)
+          .mb-3
+            label.form-label(for='email')= t('Email')
+            input#email.form-control(type='email', value=user.email, disabled)
+          .mb-3
+            label.form-label(for='name')= t('Name')
+            input#name.form-control(type='text', name='name', value=user.name, maxlength='80')
+          button.btn.btn-ghost(type='submit')= t('Save')
+
+    .plane.faceted.slate.mb-4
+      .plane-head
+        h2= t('Change password')
+      .plane-body
+        form(method='POST', action='/account/password')
+          input(type='hidden', name='_csrf', value=_csrf)
+          .mb-3
+            label.form-label(for='currentPassword')= t('Current password')
+            input#currentPassword.form-control(type='password', name='currentPassword', autocomplete='current-password', required)
+          .mb-3
+            label.form-label(for='password')= t('New password')
+            input#password.form-control(type='password', name='password', minlength='8', maxlength='128', autocomplete='new-password', required)
+          .mb-3
+            label.form-label(for='confirmPassword')= t('Confirm new password')
+            input#confirmPassword.form-control(type='password', name='confirmPassword', minlength='8', maxlength='128', autocomplete='new-password', required)
+          button.btn.btn-ghost(type='submit')= t('Change password')
+
+    .plane(style='border-color: var(--crimson)')
+      .plane-head
+        h2(style='color: var(--crimson)')= t('Delete account')
+      .plane-body
+        p.small.muted= t('Permanently deletes your account, transactions, budgets, chat history and operation log.')
+        form(
+          method='POST',
+          action='/account/delete',
+          onsubmit=`return confirm(${JSON.stringify(t('Delete your account and all data? This cannot be undone.'))})`
+        )
+          input(type='hidden', name='_csrf', value=_csrf)
+          button.btn.btn-danger(type='submit')= t('Delete my account')

@@ -1,0 +1,29 @@
+extends ../layout
+
+block content
+  .container.auth-wrap
+    .auth-card
+      .plane.stacked.faceted.ochre.p-4.p-md-5
+        span.eyebrow= t('Start planning')
+        h1.h2.mt-2.mb-4= t('Create your account')
+        form(method='POST', action='/signup')
+          input(type='hidden', name='_csrf', value=_csrf)
+          .mb-3
+            label.form-label(for='name')
+              | #{ t('Name') }
+              span.muted.fw-normal.ms-1= t('(optional)')
+            input#name.form-control(type='text', name='name', maxlength='80', autocomplete='name')
+          .mb-3
+            label.form-label(for='email')= t('Email')
+            input#email.form-control(type='email', name='email', autocomplete='email', required)
+          .mb-3
+            label.form-label(for='password')= t('Password')
+            input#password.form-control(type='password', name='password', minlength='8', maxlength='128', autocomplete='new-password', required)
+            .form-text= t('At least 8 characters.')
+          .mb-4
+            label.form-label(for='confirmPassword')= t('Confirm password')
+            input#confirmPassword.form-control(type='password', name='confirmPassword', minlength='8', maxlength='128', autocomplete='new-password', required)
+          button.btn.btn-danger.btn-lg.w-100(type='submit')= t('Create account')
+        p.mt-4.mb-0.small.muted
+          | #{ t('Already have an account?') }
+          a.ms-1.fw-bold(href='/login')= t('Sign in')

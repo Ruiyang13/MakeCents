@@ -1,0 +1,19 @@
+//- Scan review sheet: "Is this correct?" Every row is editable; unticked rows are skipped.
+#scan-modal.modal.fade(tabindex='-1', aria-labelledby='scan-title', aria-hidden='true')
+  .modal-dialog.modal-dialog-centered.modal-lg.modal-dialog-scrollable
+    .modal-content.rec-sheet
+      .rec-sheet-head
+        span.rec-glyph.tone-2
+          i.fas.fa-receipt
+        div
+          h2#scan-title.h5.mb-0= t('Is this correct?')
+          span.small.muted= t("Check the amounts, fix anything the AI got wrong, untick rows you don't want.")
+        button.btn-close.ms-auto(type='button', data-bs-dismiss='modal', aria-label=t('Close'))
+      #scan-warn.alert.alert-warning.small.mt-3.mb-0(hidden)
+      .modal-body.px-0
+        img#scan-preview.scan-preview(alt=t('Your uploaded image'))
+        #scan-rows.scan-rows
+      #scan-error.alert.alert-danger.small(hidden)
+      .d-flex.gap-2.justify-content-end
+        button.btn.btn-ghost(type='button', data-bs-dismiss='modal')= t('Cancel')
+        button#scan-save.btn.btn-danger(type='button')= t('Save')

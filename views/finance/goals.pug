@@ -1,0 +1,105 @@
+extends ../layout
+include ../partials/piggy
+
+block content
+  - const levelText = [t('Just getting started'), t('A quarter full'), t('Halfway there!'), t('Almost full'), t('Full! Goal reached 🎉')];
+  - const statusText = { ontrack: t('On track'), behind: t('Behind'), done: t('Done'), overdue: t('Deadline passed') };
+  - const date = (d) => new Date(d).toLocaleDateString(dateLocale, { day: 'numeric', month: 'short', year: 'numeric' });
+  .container.pb-5
+    .page-head.d-flex.justify-content-between.align-items-end.flex-wrap.gap-4
+      div
+        span.eyebrow= t('Savings goals · 储蓄目标')
+        h1= t('What are you saving for?')
+      .kpis
+        .kpi
+          .label= t('Usually left over each month')
+          .value.num(style=freeCash < 0 ? 'color: var(--crimson)' : undefined)= money0(freeCash)
+
+    .goals-grid
+      each g in goals
+        - const p = g.plan;
+        .plane.stacked.goal-card(class=`st-${p.status}`)
+          .goal-top
+            +piggy(p.pct, p.level, g.id, t('{name}: {pct}% saved', { name: g.name, pct: p.pct }))
+            .goal-head
+              span.goal-status= statusText[p.status]
+              h2= g.name
+              .goal-amount.num
+                b= money0(p.saved)
+                span / #{ money0(g.target) }
+              .goal-bar
+                span(style=`width: ${p.pct}%`)
+              .small.muted
+                = levelText[p.level]
+                |
+                | · #{ t('{pct}% saved', { pct: p.pct }) }
+          .goal-plan
+            if p.status === 'done'
+              p.mb-0
+                b= t('Goal reached.')
+                |  #{ t('Delete it, or keep adding if you want a buffer.') }
+            else if p.status === 'overdue'
+              p.mb-0= t('The deadline ({date}) has passed with {amount} still to go.', { date: date(g.deadline), amount: money(p.remaining) })
+            else
+              p.mb-2
+                = t('Put aside {week} a week ({month} a month) to reach it by {date}.', { week: money(p.perWeek), month: money(p.perMonth), date: date(g.deadline) })
+                span.muted= ' ' + t('{n} days left.', { n: p.daysLeft })
+              if p.fits
+                p.fit.ok.mb-0
+                  i.fas.fa-circle-check.me-2
+                  = t('Fits: you usually have {spare} left over after this each month.', { spare: money0(p.spare) })
+              else
+                p.fit.no.mb-1
+                  i.fas.fa-triangle-exclamation.me-2
+                  = t("Doesn't fit in what's usually left over ({free}). To make room:", { free: money0(freeCash) })
+                if p.trims.length
+                  .chips.mb-2
+                    each x in p.trims
+                      span.chip.trim= t('Trim {cat} by {amount}/month', { cat: cat(x.category), amount: money0(x.amount) })
+                if p.realistic
+                  p.small.mb-0= t('Even with those trims, a realistic date is {date}.', { date: date(p.realistic) })
+          .goal-actions
+            form.goal-add(method='POST', action=`/finance/goals/${g.id}/contribute`)
+              input(type='hidden', name='_csrf', value=_csrf)
+              label.budget-input
+                span.cur= currencySymbol
+                input(type='text', inputmode='decimal', name='amount', placeholder='0.00', required, pattern='\\d{1,8}(\\.\\d{1,2})?', aria-label=t('Amount'))
+              button.btn.btn-danger.btn-sm(type='submit', name='direction', value='add')
+                i.fas.fa-coins.me-1
+                = t('Add savings')
+              button.btn.btn-ghost.btn-sm(type='submit', name='direction', value='take')= t('Take out')
+            form(method='POST', action=`/finance/goals/${g.id}/delete`, onsubmit=`return confirm(${JSON.stringify(t('Delete this goal?'))})`)
+              input(type='hidden', name='_csrf', value=_csrf)
+              button.btn.btn-ghost.btn-sm.btn-icon(type='submit', aria-label=t('Delete goal'), title=t('Delete goal'))
+                i.fas.fa-trash-can
+
+      //- New goal
+      form.plane.faceted.ochre.goal-card.goal-new(method='POST', action='/finance/goals', autocomplete='off')
+        input(type='hidden', name='_csrf', value=_csrf)
+        .goal-top
+          +piggy(0, 0, 'new', t('An empty piggy bank for a new goal'))
+          .goal-head
+            span.goal-status= t('New goal')
+            h2= t('Start a new piggy bank')
+        .row.g-2
+          .col-12
+            label.form-label(for='goal-name')= t('What for?')
+            input#goal-name.form-control(type='text', name='name', maxlength='60', required, placeholder=t('e.g. Tokyo trip, new laptop, emergency fund'))
+          .col-6
+            label.form-label(for='goal-target')= t('Target')
+            label.budget-input.w-100
+              span.cur= currencySymbol
+              input#goal-target(type='text', inputmode='decimal', name='target', required, pattern='\\d{1,8}(\\.\\d{1,2})?', placeholder='1500')
+          .col-6
+            label.form-label(for='goal-deadline')= t('By when?')
+            input#goal-deadline.form-control(type='date', name='deadline', required, min=minDate)
+          .col-12
+            label.form-label(for='goal-start')
+              = t('Already saved')
+              span.muted.fw-normal.ms-1= t('(optional)')
+            label.budget-input.w-100
+              span.cur= currencySymbol
+              input#goal-start(type='text', inputmode='decimal', name='start', pattern='\\d{1,8}(\\.\\d{1,2})?', placeholder='0')
+        button.btn.btn-danger.w-100.mt-3(type='submit')
+          i.fas.fa-piggy-bank.me-2
+          = t('Create goal')
