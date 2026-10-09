@@ -65,7 +65,15 @@ describe('Auth & route protection', () => {
     const res = await agent
       .post('/signup')
       .type('form')
-      .send({ _csrf: csrf, name: 'Ada', email: 'Ada@Example.com', password: 'correct-horse', confirmPassword: 'correct-horse', currency: 'EUR' })
+      .send({
+        _csrf: csrf,
+        name: 'Ada',
+        email: 'Ada@Example.com',
+        password: 'correct-horse',
+        confirmPassword: 'correct-horse',
+        currency: 'EUR',
+        aiConsent: 'yes',
+      })
       .expect(302);
     expect(res.headers.location).to.equal('/finance');
     const page = await agent.get('/finance').expect(200);
@@ -73,6 +81,7 @@ describe('Auth & route protection', () => {
     const user = await User.findOne({ email: 'ada@example.com' }).lean();
     expect(user.password).to.not.equal('correct-horse'); // hashed
     expect(user.currency).to.equal('EUR');
+    expect(user.aiConsentAt).to.be.instanceOf(Date);
     expect((await agent.get('/finance/budgets').expect(200)).text).to.include('€'); // the chosen currency, before any transactions
     await agent.get('/logout').expect(302);
     await agent.get('/finance').expect(302);
@@ -94,6 +103,17 @@ describe('Auth & route protection', () => {
     expect(res.headers.location).to.equal('/finance');
   });
 
+  it('sign-up needs the AI processing notice to be acknowledged', async () => {
+    const agent = request.agent(app);
+    const page = (await agent.get('/signup')).text;
+    expect(page).to.include('sent to Anthropic for processing').and.include('name="aiConsent"');
+    const csrf = csrfOf(page);
+    const body = { _csrf: csrf, email: 'noconsent@example.com', password: 'correct-horse', confirmPassword: 'correct-horse', currency: 'GBP' };
+    const res = await agent.post('/signup').type('form').send(body).expect(302);
+    expect(res.headers.location).to.equal('/signup');
+    expect(await User.exists({ email: 'noconsent@example.com' })).to.equal(null);
+  });
+
   it('two-step sign-in: set up with a code, then every sign-in needs a fresh code', async () => {
     const totp = require('../config/totp');
     const agent = request.agent(app);
@@ -102,7 +122,7 @@ describe('Auth & route protection', () => {
     await agent
       .post('/signup')
       .type('form')
-      .send({ _csrf: csrf, ...creds, confirmPassword: creds.password, currency: 'GBP' })
+      .send({ _csrf: csrf, ...creds, confirmPassword: creds.password, currency: 'GBP', aiConsent: 'yes' })
       .expect(302);
     csrf = csrfOf((await agent.get('/account')).text);
     await agent.post('/account/2fa/setup').type('form').send({ _csrf: csrf }).expect(302);
@@ -180,7 +200,7 @@ describe('Auth & route protection', () => {
       await agent
         .post('/signup')
         .type('form')
-        .send({ _csrf: csrf, email: 'rec@example.com', password: 'correct-horse', confirmPassword: 'correct-horse', currency: 'GBP' })
+        .send({ _csrf: csrf, email: 'rec@example.com', password: 'correct-horse', confirmPassword: 'correct-horse', currency: 'GBP', aiConsent: 'yes' })
         .expect(302);
       user = await User.findOne({ email: 'rec@example.com' });
       csrf = csrfOf((await agent.get('/finance/record')).text);

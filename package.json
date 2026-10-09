@@ -10,6 +10,7 @@
     "seed": "node scripts/seed-transactions.js",
     "check-tools": "node scripts/check-finance-tools.js",
     "evidence": "node scripts/evidence-run.js",
+    "test-cases": "node scripts/test-cases.js",
     "test": "mocha --timeout=60000 --exit",
     "lint": "eslint . && prettier . --check",
     "format": "prettier . --write"

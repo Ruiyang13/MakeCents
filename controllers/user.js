@@ -110,6 +110,7 @@ exports.postSignup = async (req, res, next) => {
     errors.push({ msg: req.t('Password must be {min}-128 characters.', { min: MIN_PASSWORD }) });
   if (password !== confirmPassword) errors.push({ msg: 'Passwords do not match.' });
   if (!pickCurrency(req.body.currency)) errors.push({ msg: 'Choose a currency.' });
+  if (!req.body.aiConsent) errors.push({ msg: 'Please confirm you understand how the AI processes your data.' });
   if (errors.length) {
     errors.forEach((e) => req.flash('errors', e));
     return res.redirect('/signup');
@@ -127,6 +128,7 @@ exports.postSignup = async (req, res, next) => {
         .trim()
         .slice(0, 80),
       currency: req.body.currency,
+      aiConsentAt: new Date(),
     });
     logInAndRedirect(req, res, next, user);
   } catch (error) {

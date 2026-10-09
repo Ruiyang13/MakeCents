@@ -14,6 +14,7 @@ const userSchema = new mongoose.Schema(
     currency: { type: String, enum: CURRENCIES },
     // Two-step sign-in: set once the user has proved their authenticator app works. lastStep blocks code replay.
     totp: { secret: String, lastStep: Number },
+    aiConsentAt: Date, // when the user agreed to AI processing (sign-up notice)
   },
   { timestamps: true },
 );

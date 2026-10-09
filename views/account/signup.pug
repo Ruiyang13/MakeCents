@@ -29,6 +29,14 @@ block content
           .mb-4
             label.form-label(for='confirmPassword')= t('Confirm password')
             input#confirmPassword.form-control(type='password', name='confirmPassword', minlength='8', maxlength='128', autocomplete='new-password', required)
+          //- Plain-language notice: what goes to the AI provider, before any data exists
+          .ai-notice.mb-4
+            p.small.mb-2
+              i.fas.fa-circle-info.me-2
+              = t('PlanSmart uses Claude, an AI model by Anthropic. To answer you, your messages, the transaction data the assistant looks up and any images you upload are sent to Anthropic for processing. Nothing is sent anywhere else, and images are not stored.')
+            .form-check
+              input#aiConsent.form-check-input(type='checkbox', name='aiConsent', value='yes', required)
+              label.form-check-label.small(for='aiConsent')= t('I understand my data is processed by AI as described above.')
           button.btn.btn-danger.btn-lg.w-100(type='submit')= t('Create account')
         p.mt-4.mb-0.small.muted
           | #{ t('Already have an account?') }

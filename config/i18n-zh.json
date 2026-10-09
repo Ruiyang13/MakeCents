@@ -538,5 +538,8 @@
   "changed password": "修改了密码",
   "turned on two-step sign-in": "开启了两步验证登录",
   "turned off two-step sign-in": "关闭了两步验证登录",
-  "Refused": "已拒绝执行"
+  "Refused": "已拒绝执行",
+  "PlanSmart uses Claude, an AI model by Anthropic. To answer you, your messages, the transaction data the assistant looks up and any images you upload are sent to Anthropic for processing. Nothing is sent anywhere else, and images are not stored.": "PlanSmart 使用 Anthropic 的 AI 模型 Claude。为了回答你的问题，你发送的消息、助手查询到的交易数据以及你上传的图片会发送给 Anthropic 处理。这些数据不会发送到其他任何地方，图片也不会被保存。",
+  "I understand my data is processed by AI as described above.": "我了解我的数据会按上述方式由 AI 处理。",
+  "Please confirm you understand how the AI processes your data.": "请确认你了解 AI 如何处理你的数据。"
 }

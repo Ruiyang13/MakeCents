@@ -2130,3 +2130,11 @@ footer.site-foot {
 .audit-status.st-expired {
   color: var(--crimson);
 }
+
+/* AI processing notice on sign-up */
+.ai-notice {
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  padding: 0.75rem 0.9rem;
+  background: color-mix(in srgb, var(--paper-2) 60%, transparent);
+}

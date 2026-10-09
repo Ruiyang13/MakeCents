@@ -4,7 +4,12 @@ AI personal finance assistant (FinTechathon 2026 International Track, Topic A: P
 It reads a user's transactions, explains where the money goes, helps set budgets and savings goals, and warns
 before overspending. English / 中文, light / dark mode, currency chosen at sign-up.
 
-Technical documentation (architecture, algorithms, security design): [docs/TECHNICAL.md](docs/TECHNICAL.md).
+Submission documents:
+
+- [Technical documentation](docs/TECHNICAL.md): architecture, core algorithms, security design
+- [Security self-assessment](docs/SECURITY.md): permission tiers, controls, known-risk list
+- [Test cases](docs/TEST-CASES.md): every automated test, generated from a real run
+- [Execution evidence](docs/evidence/README.md): scripted sandbox scenario with its operation log (CSV/JSON)
 
 ## Features
 
@@ -40,13 +45,40 @@ npm start                 # http://localhost:8080
 `npm run seed -- --goals-only` recreates only the demo savings goals and leaves transactions alone.
 Never commit `.env` (it holds the API key); it is in `.gitignore`.
 
+## Run with Docker
+
+Requires Docker with Compose. Runs PlanSmart and MongoDB together, in production mode.
+
+```bash
+cp .env.example .env      # set SESSION_SECRET (required) and ANTHROPIC_API_KEY (for chat and receipt reading)
+docker compose up --build -d
+docker compose run --rm app node scripts/seed-transactions.js   # demo households
+# open http://localhost:8080 and sign in as okafor.demo@fintechathon.test / fintech1234
+```
+
+Generate a session secret with `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`.
+In production mode the app refuses to start with the placeholder secret, and the sign-in page hides the demo hint.
+
+### Hosting it
+
+Any Node 24 host works (e.g. Render, Railway, Fly.io) with a managed MongoDB (e.g. MongoDB Atlas):
+
+1. Create the database and copy its connection string.
+2. Deploy this repository (the Dockerfile, or `npm ci --omit=dev && node app.js`).
+3. Set `NODE_ENV=production`, `MONGODB_URI`, `SESSION_SECRET`, `ANTHROPIC_API_KEY` and `BASE_URL=https://<your-domain>`
+   (an `https` URL turns on secure cookies and HSTS).
+4. Seed demo data once with `node scripts/seed-transactions.js`.
+5. Set a monthly spending limit on the Anthropic API key, and consider `ANTHROPIC_MODEL=claude-haiku-5-5` for a
+   public demo to keep each message cheap.
+
 ## Test
 
 ```bash
-npm test                  # 76 tests: auth, CSRF, CSP, two-step sign-in, permissions, sandbox, bills, recommendations, goals, i18n, styles
+npm test                  # 78 tests: auth, CSRF, CSP, prompt injection, two-step sign-in, permissions, sandbox, bills, recommendations, goals, i18n, styles
 npm run lint              # eslint + prettier
 npm run check-tools       # smoke-test the agent's tools against seeded data
 npm run evidence          # scripted sandbox scenario -> docs/evidence/ (operation log CSV/JSON + summary)
+npm run test-cases        # regenerate docs/TEST-CASES.md from a test run
 ```
 
 Tests use an in-memory MongoDB and stub the Claude calls, so they need no API key.
