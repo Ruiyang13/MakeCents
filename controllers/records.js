@@ -125,8 +125,9 @@ exports.postRecord = async (req, res, next) => {
   }
   try {
     const currency = await accountCurrency(req.user._id);
-    await Transaction.create(toDoc(req.user._id, currency, entry, 'manual'));
+    const tx = await Transaction.create(toDoc(req.user._id, currency, entry, 'manual'));
     const { meta, value, merchant } = entry;
+    await AgentAction.logUser(req.user._id, 'record_entry', { category: meta.key, amount: tx.amount, merchant, date: tx.date }, { id: tx._id });
     req.flash('success', {
       msg:
         req.t('Recorded {amount} · {cat}', { amount: fmtFor(currency).format(value), cat: req.cat(meta.key) }) +
@@ -141,9 +142,11 @@ exports.postRecord = async (req, res, next) => {
 // Only entries the user added (by hand or by scan) can be deleted; imported history stays untouched.
 exports.postDeleteRecord = async (req, res, next) => {
   try {
-    const ok =
+    const gone =
       mongoose.isValidObjectId(req.params.id) &&
-      (await Transaction.deleteOne({ _id: req.params.id, user: req.user._id, source: { $in: DELETABLE_SOURCES } })).deletedCount;
+      (await Transaction.findOneAndDelete({ _id: req.params.id, user: req.user._id, source: { $in: DELETABLE_SOURCES } }).lean());
+    if (gone) await AgentAction.logUser(req.user._id, 'delete_entry', { id: gone._id, merchant: gone.merchant, amount: gone.amount, date: gone.date });
+    const ok = Boolean(gone);
     req.flash(ok ? 'success' : 'errors', { msg: ok ? 'Entry deleted.' : 'Entry not found.' });
     res.redirect('/finance/record#history');
   } catch (error) {

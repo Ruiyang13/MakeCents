@@ -239,8 +239,9 @@ The confirmation protocol (`decideAction` in `controllers/finance-agent.js`):
    a replay, or another user's request finds nothing to update.
 4. **Re-validation at execution.** Stored arguments are parsed with the schema and checked against
    the rules again at confirm time, so a proposal can't apply to data that changed since it was made.
-5. **Audit trail.** Every read and every proposal is stored with arguments, status, result or error
-   and timestamps. `GET /finance/audit` returns the user's last 500 records as JSON.
+5. **Operation log.** Every read, every proposal and every refused attempt (with the rule it broke) is stored
+   with arguments, status, result or error and timestamps. `/finance/audit` shows it as a page, and
+   `/finance/audit/export?format=csv|json` downloads it (CSV cells are quoted and formula-safe).
 6. **Money movement (move tier) adds:**
    - destinations limited to the user's own savings goals (no more than the goal still needs) and their
      active detected bills (no more than 20% above the usual amount);
@@ -253,9 +254,11 @@ The confirmation protocol (`decideAction` in `controllers/finance-agent.js`):
      authenticator code (each code works once); a missing or wrong code leaves the proposal untouched;
    - the result in the operation log records `from`, `to`, `amount`, `balanceBefore` and `balanceAfter`.
 
-Changes the user makes on the app's own forms (Record, Budgets, Goals) are direct user actions, not
+Changes the user makes on the app's own forms (Record, Budgets, Goals, Account) are direct user actions, not
 agent actions; they are validated server-side the same way. Scanned receipt rows are logged as
-`scan_image` (read) and `scan_image_save` (write, user-confirmed).
+`scan_image` (read) and `scan_image_save` (write, user-confirmed). Form changes are logged too, with tier `user`
+(entries recorded or deleted, budgets saved, goals created, added to, taken from or deleted, profile, password and
+two-step sign-in changes).
 
 ### 3.3 Prompt-injection containment
 
@@ -480,9 +483,10 @@ The savings jar is decorative, but deterministic:
 ## 6. Testing
 
 ```bash
-npm test     # 74 tests, in-memory MongoDB, Claude stubbed: no API key needed
+npm test     # 76 tests, in-memory MongoDB, Claude stubbed: no API key needed
 npm run lint # eslint + prettier
 npm run check-tools  # runs every agent tool against seeded demo data
+npm run evidence     # 16-step sandbox scenario, writes docs/evidence/ (operation log + summary)
 ```
 
 | Suite                         | What it proves                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
@@ -493,6 +497,12 @@ npm run check-tools  # runs every agent tool against seeded demo data
 | `recommendations.test.js`     | Cash-flow warning first, creep and its saving, delivery, overlaps, fee-specific advice, ranking and the cap of 6                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `goals.test.js`               | Per-week/month amounts, fits, trims (max 20%, biggest first), realistic date, on track vs behind, jar levels, sharing left-over between goals                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `i18n.test.js`, `css.test.js` | Every string translated with matching placeholders; every page has its styles                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+
+**Execution evidence.** `npm run evidence` seeds a demo household into a throwaway in-memory database and
+runs 16 steps through the agent's real tools and confirm function: reads, a confirmed and a rejected proposal,
+sandbox transfers and a bill payment, and refused attempts (over the per-move limit, over the daily limit, a
+prompt-injection payee, another user's confirm, an expired proposal, a move without the authenticator code). It
+checks each outcome and writes the operation log to `docs/evidence/` as CSV, JSON and a Markdown summary.
 
 **Demo data.** `npm run seed` creates three households with 6 months of realistic transactions, each
 with a deliberate story the agent should find: subscription creep, a budget-busting month, a price rise

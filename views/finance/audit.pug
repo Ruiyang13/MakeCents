@@ -1,0 +1,60 @@
+extends ../layout
+
+block content
+  - const tierName = { read: t('Agent · read'), write: t('Agent · proposal'), move: t('Agent · money move'), user: t('You') };
+  - const statusName = { executed: t('Done'), pending: t('Waiting'), confirmed: t('Confirmed'), rejected: t('Rejected'), expired: t('Expired'), error: t('Failed'), refused: t('Refused') };
+  //- Operation log: what the assistant read, proposed and moved, what you confirmed, and your own changes.
+  .container.pb-5
+    .page-head.d-flex.justify-content-between.align-items-end.flex-wrap.gap-4
+      div
+        span.eyebrow= t('Operation log')
+        h1= t('Everything that happened')
+        p.muted.mb-0= t('Every action by the assistant and every change you made, newest first.')
+      .d-flex.gap-2
+        a.btn.btn-ghost.btn-sm(href='/finance/audit/export?format=csv')
+          i.fas.fa-file-csv.me-2
+          = t('Download CSV')
+        a.btn.btn-ghost.btn-sm(href='/finance/audit/export?format=json')
+          i.fas.fa-file-code.me-2
+          = t('Download JSON')
+
+    .kpis.mb-4
+      .kpi
+        .label= t('Agent reads')
+        .value.num= summary.reads
+      .kpi
+        .label= t('Agent proposals · confirmed')
+        .value.num #{ summary.proposals } · #{ summary.confirmed }
+      .kpi
+        .label= t('Sandbox money moves')
+        .value.num= summary.moves
+      .kpi
+        .label= t('Your own changes')
+        .value.num= summary.yours
+
+    .plane.stacked
+      if rows.length
+        .table-responsive
+          table.table.audit-table.mb-0
+            thead
+              tr
+                th= t('Time')
+                th= t('Who')
+                th= t('Action')
+                th= t('Details')
+                th= t('Status')
+            tbody
+              each r in rows
+                tr(class=`tier-${r.tier}`)
+                  td.num.text-nowrap= new Date(r.time).toLocaleString(dateLocale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+                  td.text-nowrap
+                    span.audit-tier= tierName[r.tier] || r.tier
+                  td= r.label
+                  td.audit-detail
+                    = r.detail
+                    if r.error
+                      span.d-block.audit-error= r.error
+                  td.text-nowrap
+                    span.audit-status(class=`st-${r.status}`)= statusName[r.status] || r.status
+      else
+        p.muted.p-4.mb-0= t('Nothing yet. Ask the assistant something, or record an entry.')

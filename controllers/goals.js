@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const Transaction = require('../models/Transaction');
 const SavingsGoal = require('../models/SavingsGoal');
 const User = require('../models/User');
+const AgentAction = require('../models/AgentAction');
 const { detectBills, fixedClassifier } = require('./bills');
 
 // Savings goals with automatic plans. The plan answers three questions from the user's own data:
@@ -150,6 +151,7 @@ exports.postGoal = async (req, res, next) => {
       contributions: start && Number(start) > 0 ? [{ amount: Number(start), date: now }] : [],
     });
     if (Number(start) > 0) req.session.jarFrom = { id: created._id.toString(), pct: 0, added: Number(start) };
+    await AgentAction.logUser(req.user._id, 'create_goal', { name, target: Number(target), deadline, start: Number(start) || 0 }, { id: created._id });
     req.flash('success', { msg: req.t('Goal created: {name}', { name }) });
     res.redirect('/finance/goals');
   } catch (error) {
@@ -174,6 +176,12 @@ exports.postContribution = async (req, res, next) => {
       if (req.body.direction !== 'take') req.session.jarFrom = { id: goal._id.toString(), pct: planFor(goal).pct, added: Number(raw) };
       goal.contributions.push({ amount: req.body.direction === 'take' ? -Number(raw) : Number(raw), date: new Date() });
       await goal.save();
+      await AgentAction.logUser(
+        req.user._id,
+        req.body.direction === 'take' ? 'goal_take' : 'goal_add',
+        { goal: goal.name, amount: Number(raw) },
+        { saved: goal.saved },
+      );
       if (!wasFull && goal.saved >= goal.target) req.flash('success', { msg: req.t('🎉 {name} is fully saved!', { name: goal.name }) });
       else
         req.flash('success', {
@@ -188,7 +196,9 @@ exports.postContribution = async (req, res, next) => {
 
 exports.postDeleteGoal = async (req, res, next) => {
   try {
-    const ok = mongoose.isValidObjectId(req.params.id) && (await SavingsGoal.deleteOne({ _id: req.params.id, user: req.user._id })).deletedCount;
+    const gone = mongoose.isValidObjectId(req.params.id) && (await SavingsGoal.findOneAndDelete({ _id: req.params.id, user: req.user._id }));
+    if (gone) await AgentAction.logUser(req.user._id, 'delete_goal', { goal: gone.name, saved: gone.saved });
+    const ok = Boolean(gone);
     req.flash(ok ? 'success' : 'errors', { msg: ok ? 'Goal deleted.' : 'Goal not found.' });
     res.redirect('/finance/goals');
   } catch (error) {

@@ -125,6 +125,7 @@ app.post('/finance/reset', isAuthenticated, financeController.postFinanceAgentRe
 app.post('/finance/actions/:id/confirm', isAuthenticated, financeController.postFinanceActionConfirm);
 app.post('/finance/actions/:id/reject', isAuthenticated, financeController.postFinanceActionReject);
 app.get('/finance/audit', isAuthenticated, financeController.getFinanceAudit);
+app.get('/finance/audit/export', isAuthenticated, financeController.getFinanceAuditExport);
 app.get('/finance/bills', isAuthenticated, billsController.getBills);
 app.get('/finance/record', isAuthenticated, recordsController.getRecord);
 app.post('/finance/record', isAuthenticated, limit(1, 30), recordsController.postRecord);

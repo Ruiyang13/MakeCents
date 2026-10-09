@@ -2,6 +2,7 @@ const passport = require('passport');
 const validator = require('validator');
 const QRCode = require('qrcode');
 const User = require('../models/User');
+const AgentAction = require('../models/AgentAction');
 const totp = require('../config/totp');
 const { deleteUserFinanceAgentData } = require('./finance-agent');
 
@@ -157,6 +158,7 @@ exports.postUpdateProfile = async (req, res, next) => {
       .slice(0, 80);
     req.user.currency = pickCurrency(req.body.currency) || req.user.currency;
     await req.user.save();
+    await AgentAction.logUser(req.user._id, 'update_profile', { name: req.user.name, currency: req.user.currency });
     req.flash('success', { msg: 'Profile updated.' });
     res.redirect('/account');
   } catch (error) {
@@ -176,6 +178,7 @@ exports.postUpdatePassword = async (req, res, next) => {
     } else {
       req.user.password = password;
       await req.user.save();
+      await AgentAction.logUser(req.user._id, 'change_password');
       req.flash('success', { msg: 'Password changed.' });
     }
     res.redirect('/account');
@@ -199,6 +202,7 @@ exports.postTwoStepEnable = async (req, res, next) => {
       req.user.totp = { secret, lastStep: step };
       await req.user.save();
       delete req.session.totpSetup;
+      await AgentAction.logUser(req.user._id, 'two_step_on');
       req.flash('success', { msg: 'Two-step sign-in is on. You will need a code from your app each time you sign in.' });
     }
     res.redirect('/account#two-step');
@@ -222,6 +226,7 @@ exports.postTwoStepDisable = async (req, res, next) => {
     } else {
       req.user.totp = undefined;
       await req.user.save();
+      await AgentAction.logUser(req.user._id, 'two_step_off');
       req.flash('success', { msg: 'Two-step sign-in is off.' });
     }
     res.redirect('/account#two-step');

@@ -26,7 +26,7 @@ nav.topbar.navbar.navbar-expand-md.py-2
           li.nav-item
             a.nav-link(class=title === 'Goals' ? 'active' : '', href='/finance/goals')= t('Goals')
           li.nav-item
-            a.nav-link(href='/finance/audit', target='_blank')= t('Operation log')
+            a.nav-link(class=title === 'Operation log' ? 'active' : '', href='/finance/audit')= t('Operation log')
       .d-flex.gap-2.align-items-center.py-2.py-md-0
         //- Language switch: works like the dark-mode toggle (sets a cookie, reloads)
         button.btn.btn-ghost.btn-sm.px-2.lang-toggle(

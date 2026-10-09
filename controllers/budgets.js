@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const Transaction = require('../models/Transaction');
 const Budget = require('../models/Budget');
 const User = require('../models/User');
+const AgentAction = require('../models/AgentAction');
 const { QUICK_CATEGORIES } = require('../config/categories');
 
 // Budgets page: every spending category in one table, edited and saved in one go.
@@ -82,6 +83,9 @@ exports.postBudgetsAll = async (req, res, next) => {
       ),
     );
     const n = changes.filter((c) => c.limit != null).length;
+    await AgentAction.logUser(req.user._id, 'save_budgets', {
+      budgets: Object.fromEntries(changes.filter((c) => c.limit != null).map((c) => [c.key, c.limit])),
+    });
     req.flash('success', {
       msg:
         n === 1

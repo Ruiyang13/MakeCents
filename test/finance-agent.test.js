@@ -4,7 +4,7 @@ const { MongoMemoryServer } = require('mongodb-memory-server');
 const Transaction = require('../models/Transaction');
 const Budget = require('../models/Budget');
 const AgentAction = require('../models/AgentAction');
-const { _buildTools, _decideAction, _dailySpendHeatmap } = require('../controllers/finance-agent');
+const { _buildTools, _decideAction, _dailySpendHeatmap, _auditCsv } = require('../controllers/finance-agent');
 
 // Finance agent tools + permission tiers, no LLM involved.
 describe('Finance Agent tools & permissions', () => {
@@ -37,6 +37,13 @@ describe('Finance Agent tools & permissions', () => {
   beforeEach(async () => {
     await Budget.deleteMany({});
     await AgentAction.deleteMany({});
+  });
+
+  it('operation log CSV neutralises spreadsheet formulas and quotes every cell', () => {
+    const csv = _auditCsv([{ id: '1', action: '=HYPERLINK("http://x")', status: '+cmd', args: { merchant: '@evil' }, error: 'a "quoted", text' }]);
+    const [, row] = csv.split('\r\n');
+    expect(row).to.include(`"'=HYPERLINK(""http://x"")"`).and.include(`"'+cmd"`).and.include('"a ""quoted"", text"');
+    expect(row.split(',"').every((c) => !/^[=+@]/.test(c))).to.equal(true);
   });
 
   it('read tools run immediately and are audit-logged', async () => {
@@ -205,6 +212,10 @@ describe('Finance Agent tools & permissions', () => {
       await SavingsGoal.create({ user: userId, name: 'Nearly', target: 100, deadline: new Date(Date.now() + 86400000 * 30), contributions: [{ amount: 90 }] });
       expect((await call('transfer_to_goal', { goal: 'Nearly', amount: 20 })).error).to.match(/only needs 10/);
       expect(await AgentAction.countDocuments({ status: 'pending' })).to.equal(0);
+      // refused attempts are still in the operation log, with the reason
+      expect((await AgentAction.find({ status: 'refused' }).lean()).map((x) => x.error))
+        .to.have.length(3)
+        .and.satisfy((e) => e.every(Boolean));
     });
 
     it('enforces the daily limit across confirmed moves', async () => {

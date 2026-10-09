@@ -17,12 +17,21 @@ sandboxAccountSchema.statics.START_BALANCE = START_BALANCE;
 sandboxAccountSchema.statics.open = function open(userId) {
   return this.findOneAndUpdate({ user: userId }, { $setOnInsert: { balance: START_BALANCE } }, { upsert: true, returnDocument: 'after' }).lean();
 };
+// Adds `delta` (negative = take out), rounded to the penny in the database so repeated moves don't drift.
+const change = (delta) => [{ $set: { balance: { $round: [{ $add: ['$balance', delta] }, 2] } } }];
+
 // Takes money out only if it is there: one atomic update, so two confirmations can't overdraw it.
 sandboxAccountSchema.statics.debit = async function debit(userId, amount) {
   await this.open(userId);
-  const after = await this.findOneAndUpdate({ user: userId, balance: { $gte: amount } }, { $inc: { balance: -amount } }, { returnDocument: 'after' }).lean();
+  const after = await this.findOneAndUpdate({ user: userId, balance: { $gte: amount } }, change(-amount), {
+    returnDocument: 'after',
+    updatePipeline: true,
+  }).lean();
   if (!after) throw new Error('Not enough money in the sandbox account.');
-  return { before: Math.round((after.balance + amount) * 100) / 100, after: Math.round(after.balance * 100) / 100 };
+  return { before: Math.round((after.balance + amount) * 100) / 100, after: after.balance };
+};
+sandboxAccountSchema.statics.credit = function credit(userId, amount) {
+  return this.updateOne({ user: userId }, change(amount), { updatePipeline: true });
 };
 
 module.exports = mongoose.model('SandboxAccount', sandboxAccountSchema);

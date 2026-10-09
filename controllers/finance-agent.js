@@ -144,7 +144,7 @@ async function moveMoney(userId, amount, book) {
   try {
     return { ...(await book()), amount, balanceBefore: balance.before, balanceAfter: balance.after };
   } catch (error) {
-    await SandboxAccount.updateOne({ user: userId }, { $inc: { balance: amount } });
+    await SandboxAccount.credit(userId, amount);
     throw error;
   }
 }
@@ -271,7 +271,11 @@ function writeTool(userId, name, t = (s) => s) {
   return tool(
     async (args, config) => {
       const problem = await def.validate(userId, args);
-      if (problem) return JSON.stringify({ error: problem });
+      if (problem) {
+        // refused before it ever reached the user: logged, because attempts matter as much as successes
+        await AgentAction.create({ user: userId, tool: name, tier: def.tier || 'write', args, status: 'refused', error: problem });
+        return JSON.stringify({ error: problem });
+      }
       const pending = await AgentAction.countDocuments({
         user: userId,
         status: 'pending',
@@ -875,22 +879,96 @@ const decisionRoute = (approve) => async (req, res) => {
 exports.postFinanceActionConfirm = decisionRoute(true);
 exports.postFinanceActionReject = decisionRoute(false);
 
-// Operation log (submission evidence): every tool call the agent made for this user.
-exports.getFinanceAudit = async (req, res) => {
-  const rows = await AgentAction.find({ user: req.user._id }).sort({ createdAt: -1 }).limit(500).lean();
-  res.json(
-    rows.map(({ _id, tool, tier, args, status, result, error, createdAt, decidedAt }) => ({
-      id: _id,
-      tool,
-      tier,
-      args,
-      status,
-      result,
-      error,
-      createdAt,
-      decidedAt,
-    })),
-  );
+// --- operation log ----------------------------------------------------------
+// Every agent tool call, proposal, decision and sandbox money move, plus the user's own form changes.
+
+const LOG_LABELS = {
+  ...TOOL_LABELS,
+  scan_image: 'read an image',
+  scan_image_save: 'saved scanned rows',
+  record_entry: 'recorded an entry',
+  delete_entry: 'deleted an entry',
+  save_budgets: 'saved budgets',
+  create_goal: 'created a goal',
+  goal_add: 'added to a goal',
+  goal_take: 'took from a goal',
+  delete_goal: 'deleted a goal',
+  update_profile: 'updated profile',
+  change_password: 'changed password',
+  two_step_on: 'turned on two-step sign-in',
+  two_step_off: 'turned off two-step sign-in',
+};
+
+async function auditRows(userId, limit = 1000) {
+  const rows = await AgentAction.find({ user: userId }).sort({ createdAt: -1 }).limit(limit).lean();
+  return rows.map(({ _id, tool, tier, args, status, result, error, createdAt, decidedAt }) => ({
+    id: _id.toString(),
+    time: createdAt,
+    tier,
+    action: tool,
+    status,
+    args: args || {},
+    result: result ?? null,
+    error: error || null,
+    decidedAt: decidedAt || null,
+  }));
+}
+exports._auditRows = auditRows;
+
+// One cell per field, always quoted. Text starting with = + - @ would run as a formula in Excel or
+// Sheets (CSV injection), so it gets a leading apostrophe.
+const csvCell = (v) => {
+  if (v == null) return '""';
+  let s = v instanceof Date ? v.toISOString() : typeof v === 'object' ? JSON.stringify(v) : String(v);
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  return `"${s.replace(/"/g, '""')}"`;
+};
+const AUDIT_COLUMNS = ['id', 'time', 'tier', 'action', 'status', 'args', 'result', 'error', 'decidedAt'];
+const auditCsv = (rows) => [AUDIT_COLUMNS.join(','), ...rows.map((r) => AUDIT_COLUMNS.map((c) => csvCell(r[c])).join(','))].join('\r\n');
+exports._auditCsv = auditCsv;
+
+// Readable one-liner for the log page: money moves show the balance before and after.
+function auditDetail({ tier, args, result }) {
+  if (tier === 'move' && result?.balanceBefore != null) return `${result.amount} → ${result.to} · ${result.balanceBefore} → ${result.balanceAfter}`;
+  const show = (v) => (v instanceof Date ? v.toISOString().slice(0, 10) : typeof v === 'object' ? JSON.stringify(v) : String(v));
+  return Object.entries(args)
+    .filter(([k, v]) => v !== '' && v != null && k !== 'id')
+    .map(([k, v]) => `${k}: ${show(v)}`)
+    .join(' · ');
+}
+
+exports.getFinanceAudit = async (req, res, next) => {
+  try {
+    const rows = await auditRows(req.user._id, 500);
+    const count = (f) => rows.filter(f).length;
+    res.render('finance/audit', {
+      title: 'Operation log',
+      rows: rows.map((r) => ({ ...r, label: req.t(LOG_LABELS[r.action] || r.action), detail: auditDetail(r) })),
+      summary: {
+        reads: count((r) => r.tier === 'read'),
+        proposals: count((r) => r.tier === 'write' || r.tier === 'move'),
+        confirmed: count((r) => (r.tier === 'write' || r.tier === 'move') && r.status === 'confirmed'),
+        moves: count((r) => r.tier === 'move' && r.status === 'confirmed'),
+        yours: count((r) => r.tier === 'user'),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Download for submission evidence: ?format=csv (default) or json.
+exports.getFinanceAuditExport = async (req, res, next) => {
+  try {
+    const rows = await auditRows(req.user._id);
+    const json = req.query.format === 'json';
+    const day = new Date().toISOString().slice(0, 10);
+    res.attachment(`plansmart-operation-log-${day}.${json ? 'json' : 'csv'}`);
+    if (json) return res.json(rows);
+    res.type('text/csv').send(`\uFEFF${auditCsv(rows)}`); // BOM so Excel reads UTF-8 (Chinese text)
+  } catch (error) {
+    next(error);
+  }
 };
 
 // "New chat": start a fresh thread; the previous conversation is kept and listed under History.

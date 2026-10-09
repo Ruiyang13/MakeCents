@@ -23,7 +23,7 @@ Technical documentation (architecture, algorithms, security design): [docs/TECHN
 - **Money movement, sandbox only:** the agent can move money from a simulated sandbox account into the user's own savings goals or pay a detected bill. Every move needs confirmation (plus an authenticator code if two-step sign-in is on), with limits of 500 a move and 1,000 a day, an atomic balance check, and before/after balances in the operation log. There is no tool for real money, paying anyone else, or editing transactions.
 - **Two-step sign-in:** optional authenticator-app codes (TOTP), set up on the Account page.
 - **Content-Security-Policy:** scripts only from the app itself or inline blocks with a per-request nonce.
-- Every tool call is recorded in an operation log (`/finance/audit`).
+- **Operation log** (`/finance/audit`): every agent read, proposal, decision, refused attempt and money move, plus every change the user makes on the forms; downloadable as CSV or JSON.
 - Scanned images: text in the image is treated as data; every row is validated and reviewed by the user before saving.
 
 ## Run locally
@@ -43,9 +43,10 @@ Never commit `.env` (it holds the API key); it is in `.gitignore`.
 ## Test
 
 ```bash
-npm test                  # 74 tests: auth, CSRF, permissions, bills, recommendations, goals, i18n, styles
+npm test                  # 76 tests: auth, CSRF, CSP, two-step sign-in, permissions, sandbox, bills, recommendations, goals, i18n, styles
 npm run lint              # eslint + prettier
 npm run check-tools       # smoke-test the agent's tools against seeded data
+npm run evidence          # scripted sandbox scenario -> docs/evidence/ (operation log CSV/JSON + summary)
 ```
 
 Tests use an in-memory MongoDB and stub the Claude calls, so they need no API key.

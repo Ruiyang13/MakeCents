@@ -350,7 +350,12 @@ async function main() {
   await mongoose.disconnect();
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
+
+// Reused by scripts/evidence-run.js to build the same demo household in a throwaway database.
+module.exports = { PERSONAS, generateForPersona, seedGoals, DEMO_PASSWORD };

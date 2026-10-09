@@ -207,6 +207,20 @@ describe('Auth & route protection', () => {
       ]);
     });
 
+    it('operation log: your own changes are logged; the page and CSV/JSON downloads work', async () => {
+      await post({ category: 'Shopping', amount: '3', note: 'Log check' });
+      const page = await agent.get('/finance/audit').expect(200);
+      expect(page.text).to.include('recorded an entry').and.include('/finance/audit/export?format=csv');
+      const csv = await agent
+        .get('/finance/audit/export?format=csv')
+        .expect(200)
+        .expect('Content-Type', /text\/csv/);
+      expect(csv.headers['content-disposition']).to.match(/attachment; filename="plansmart-operation-log-\d{4}-\d{2}-\d{2}\.csv"/);
+      expect(csv.text).to.include('"user","record_entry","executed"');
+      const json = await agent.get('/finance/audit/export?format=json').expect(200);
+      expect(json.body.find((r) => r.action === 'record_entry' && r.args.merchant === 'Log check')).to.include({ tier: 'user', status: 'executed' });
+    });
+
     it('rejects bad amounts, unknown categories and future dates', async () => {
       const before = await Transaction.countDocuments({ user: user._id });
       await post({ category: 'DiningOut', amount: '0' });

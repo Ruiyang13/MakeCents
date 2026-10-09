@@ -2084,3 +2084,49 @@ footer.site-foot {
   letter-spacing: 0.04em;
   word-break: break-all;
 }
+
+/* operation log */
+.audit-table {
+  --bs-table-bg: transparent;
+  font-size: 0.86rem;
+}
+.audit-table th {
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.audit-tier {
+  font-weight: 700;
+  font-size: 0.78rem;
+}
+.tier-read .audit-tier {
+  color: var(--sage);
+}
+.tier-write .audit-tier {
+  color: var(--ochre);
+}
+.tier-move .audit-tier {
+  color: var(--crimson);
+}
+.audit-detail {
+  color: var(--ink-2);
+  word-break: break-word;
+}
+.audit-error {
+  color: var(--crimson);
+}
+.audit-status {
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.audit-status.st-confirmed,
+.audit-status.st-executed {
+  color: var(--sage);
+}
+.audit-status.st-rejected,
+.audit-status.st-refused,
+.audit-status.st-error,
+.audit-status.st-expired {
+  color: var(--crimson);
+}
