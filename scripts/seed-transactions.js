@@ -27,6 +27,8 @@ for (const f of ['.env', '.env.example']) {
 const User = require('../models/User');
 const SavingsGoal = require('../models/SavingsGoal');
 const Transaction = require('../models/Transaction');
+const SandboxAccount = require('../models/SandboxAccount');
+const AgentAction = require('../models/AgentAction');
 
 const DEMO_PASSWORD = 'fintech1234';
 const MONTHS = 6; // whole calendar months ending with the current (partial) month
@@ -328,12 +330,17 @@ async function main() {
       continue;
     }
 
+    // demo accounts get their persona's currency back (someone may have changed it while testing)
+    if (create) await User.updateOne({ _id: user._id }, { currency: persona.currency });
     await seedGoals(user);
     if (goalsOnly) {
       console.log(`${persona.name.padEnd(20)} goals only`);
       continue;
     }
     await Transaction.deleteMany({ user: user._id });
+    // A clean slate for demos: sandbox back to its starting balance, empty operation log (so no daily limit carries over).
+    await SandboxAccount.deleteMany({ user: user._id });
+    await AgentAction.deleteMany({ user: user._id });
     const txns = generateForPersona(persona, user._id);
     await Transaction.insertMany(txns);
 
