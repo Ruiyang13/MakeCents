@@ -6,29 +6,29 @@ block head
 block content
   - const sevTag = { warning: t('WARNING'), saving: t('SAVE'), tip: t('TIP') };
   - const signed = (n) => (n > 0 ? '+' : '−') + money0(Math.abs(n));
-  //- Insights, Copilot-style: one number, one pace chart, one ranked list, then what to do. Lieflat Wire colours.
-  .container.pb-5.lieflat
-    .lf-pagehead
+  //- Insights, Copilot-style: one number, one pace chart, one ranked list, then what to do. App palette.
+  .container.pb-5.insights
+    .ins-pagehead
       div
         h1= t('Insights')
-        .lf-hero
+        .ins-hero
           b.num= money0(monthSpent)
           span= t('spent in {month} so far', { month: monthName })
         if hasLast && paceChange
-          p.lf-pace(class=paceChange > 0 ? 'up' : 'down')
+          p.ins-pace(class=paceChange > 0 ? 'up' : 'down')
             i.fas.me-2(class=paceChange > 0 ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down')
             = paceChange > 0 ? t('{amount} more than this point in {month}', { amount: money0(paceChange), month: lastMonthName }) : t('{amount} less than this point in {month}', { amount: money0(-paceChange), month: lastMonthName })
 
-    .lf-grid
-      .lf-card
+    .ins-grid
+      .ins-card
         h2= t('Spending pace')
-        .lf-legend
+        .ins-legend
           span.now= monthName
           if hasLast
             span.last= lastMonthName
         svg#pace(viewBox='0 0 400 250', preserveAspectRatio='xMidYMid meet', role='img', aria-label=t('Running total of everyday spending this month and last month'))
 
-      .lf-card
+      .ins-card
         h2= t('Where it went')
         if categories.length
           svg#pie(viewBox='0 0 240 240', role='img', aria-label=t('Everyday spending by category this month'))
@@ -47,13 +47,13 @@ block content
           p.cat-fixed= t('Plus {amount} a month in fixed bills, kept apart', { amount: money0(fixedMonthly) })
 
     if recommendations.length || alerts.length
-      .lf-card.lf-recs.mt-4
+      .ins-card.ins-recs.mt-4
         h2= t("What I'd do next")
         ol.rec-items
           each r in recommendations
             li(class=`sev-${r.severity}`)
               .rec-main
-                span.lf-tag(class=r.severity === 'warning' ? 'hero' : r.severity === 'tip' ? 'ghost' : '')= sevTag[r.severity]
+                span.ins-tag(class=r.severity === 'warning' ? 'hero' : r.severity === 'tip' ? 'ghost' : '')= sevTag[r.severity]
                 h3= r.title
                 p.rec-action
                   = r.action
@@ -66,7 +66,7 @@ block content
           each a in alerts
             li
               .rec-main
-                span.lf-tag.ghost= t('BILLS')
+                span.ins-tag.ghost= t('BILLS')
                 h3= a.title
                 p.rec-action= a.text
 

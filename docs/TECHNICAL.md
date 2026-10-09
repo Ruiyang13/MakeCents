@@ -546,5 +546,5 @@ dependencies only and runs as a non-root user). Setup and hosting steps are in t
 - **Adapted code:** the chat streaming (SSE) and MongoDB checkpoint pattern were adapted from
   [hackathon-starter](https://github.com/sahat/hackathon-starter) (MIT, © Sahat Yalkabov). See
   `THIRD_PARTY_LICENSE-hackathon-starter.txt`.
-- **Chart styling:** follows the Lieflat Charts templates.
+- **Charts:** our own SVG code (`public/js/bills-charts.js`) and canvas code (`public/js/jar.js`); no chart library.
 - **AI model:** Anthropic Claude, via the Anthropic API.

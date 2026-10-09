@@ -103,4 +103,3 @@ test/             mocha tests
 The chat streaming (SSE) and MongoDB checkpoint pattern in `controllers/finance-agent.js` and
 `views/finance/agent.pug` were adapted from [hackathon-starter](https://github.com/sahat/hackathon-starter)
 (MIT, © Sahat Yalkabov). See `THIRD_PARTY_LICENSE-hackathon-starter.txt`.
-Charts follow the Lieflat Charts templates.

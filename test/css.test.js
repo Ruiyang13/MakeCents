@@ -11,7 +11,7 @@ describe('Stylesheet', () => {
     record: ['.rec-grid', '.rec-card', '.rec-budget', '.rec-keypad', '.rec-sheet', '.hist-row', '.hist-search', '.hist-filter'],
     goals: ['.goals-grid', '.goal-card', '.jar', '.goal-plan'],
     assistant: ['.chat-log', '.composer', '.cal-cell', '.hm-gradient', '.approval'],
-    insights: ['.lf-card', '.lf-hero', '.cat-rows', '.lf-tag', '.rec-items', '.rec-saving'],
+    insights: ['.ins-card', '.ins-hero', '.cat-rows', '.ins-tag', '.rec-items', '.rec-saving'],
   };
   for (const [page, selectors] of Object.entries(required)) {
     it(`has the ${page} page styles`, () => {

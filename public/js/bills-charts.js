@@ -1,4 +1,4 @@
-// Insights charts, Lieflat Charts grammar in the WIRE preset (grey ladder + one fluorescent-orange focal point):
+// Insights charts, drawn in the app's own palette (ink greys + one crimson focal point):
 //   pace  running total of everyday spending, this month (solid) vs last month (dotted); a crosshair reads any day
 //   pie   this month's everyday spending by category; hover a slice or its row to pull it out and read it
 (() => {
@@ -6,28 +6,26 @@
   const tr = window.t; // translations from layout.pug (English passthrough)
   const fmt0 = new Intl.NumberFormat('en-GB', { style: 'currency', currency: DATA.currency, maximumFractionDigits: 0 });
 
-  // WIRE role tokens (color-presets.js). Dark mode flips the greys to paper tints; HERO stays orange.
-  const HERO = '#F5572F';
-  const theme = () =>
-    document.documentElement.getAttribute('data-bs-theme') === 'dark'
-      ? {
-          BG: '#1C1C1A',
-          TXT: '#F0F0EE',
-          INK: '#F0F0EE',
-          MUT: 'rgba(240,240,238,.60)',
-          FAINT: 'rgba(240,240,238,.40)',
-          GRID: 'rgba(240,240,238,.16)',
-          PIE: [HERO, '#F0F0EE', '#D9AE55', '#9AAB8F', '#8C9DB5', '#8F8E86', '#5A5955'],
-        }
-      : {
-          BG: '#F0F0EE',
-          TXT: '#1F1E1C',
-          INK: '#22211F',
-          MUT: 'rgba(31,30,28,.60)',
-          FAINT: 'rgba(31,30,28,.40)',
-          GRID: 'rgba(31,30,28,.16)',
-          PIE: [HERO, '#22211F', '#C89B3C', '#7D8C74', '#6E7F96', '#8F8E86', '#C0BFB7'],
-        };
+  // Colours are the app's CSS variables (main.css :root), read at draw time so dark mode just works.
+  const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const fade = (hex, a) => {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`;
+  };
+  let HERO = '';
+  const theme = () => {
+    const ink = css('--ink');
+    HERO = css('--crimson');
+    return {
+      BG: css('--card'),
+      TXT: ink,
+      INK: ink,
+      MUT: fade(ink, 0.6),
+      FAINT: fade(ink, 0.4),
+      GRID: fade(ink, 0.16),
+      PIE: [HERO, ink, css('--ochre'), css('--sage'), css('--slate'), css('--ink-2'), fade(ink, 0.3)],
+    };
+  };
 
   const NS = 'http://www.w3.org/2000/svg';
   const el = (p, t, a) => {
@@ -66,8 +64,8 @@
     const path = (vals) => `M${vals.map((v, i) => `${x(i)} ${y(v)}`).join(' L ')}`;
 
     for (const f of [0.5, 1]) {
-      el(pace, 'line', { x1: 24, y1: y(max * f), x2: 376, y2: y(max * f), stroke: GRID, 'stroke-width': 0.6, 'stroke-dasharray': '2 4', class: 'lf-fade' });
-      txt(pace, { x: 376, y: y(max * f) - 5, 'font-size': 8, fill: MUT, 'text-anchor': 'end', class: 'lf-fade' }, fmt0.format(max * f));
+      el(pace, 'line', { x1: 24, y1: y(max * f), x2: 376, y2: y(max * f), stroke: GRID, 'stroke-width': 0.6, 'stroke-dasharray': '2 4', class: 'ins-fade' });
+      txt(pace, { x: 376, y: y(max * f) - 5, 'font-size': 8, fill: MUT, 'text-anchor': 'end', class: 'ins-fade' }, fmt0.format(max * f));
     }
     el(pace, 'line', { x1: 24, y1: base, x2: 376, y2: base, stroke: GRID, 'stroke-width': 0.8 });
     if (last.length) {
@@ -78,14 +76,14 @@
         'stroke-width': 1.6,
         'stroke-dasharray': '1 4',
         'stroke-linecap': 'round',
-        class: 'lf-fade',
+        class: 'ins-fade',
       });
     }
     const today = el(pace, 'g', {});
     if (now.length) {
-      el(pace, 'path', { d: path(now), fill: 'none', stroke: INK, 'stroke-width': 2.2, pathLength: 1, class: 'lf-draw', style: 'animation-duration:1.2s' });
+      el(pace, 'path', { d: path(now), fill: 'none', stroke: INK, 'stroke-width': 2.2, pathLength: 1, class: 'ins-draw', style: 'animation-duration:1.2s' });
       const i = now.length - 1;
-      el(today, 'circle', { cx: x(i), cy: y(now[i]), r: 5, fill: HERO, class: 'lf-pop', style: 'animation-delay:1s' });
+      el(today, 'circle', { cx: x(i), cy: y(now[i]), r: 5, fill: HERO, class: 'ins-pop', style: 'animation-delay:1s' });
       txt(
         today,
         {
@@ -96,13 +94,13 @@
           fill: TXT,
           'text-anchor': i > N * 0.8 ? 'end' : 'middle',
           style: `paint-order:stroke;stroke:${BG};stroke-width:4px;animation-delay:1.1s`,
-          class: 'lf-fade',
+          class: 'ins-fade',
         },
         fmt0.format(now[i]),
       );
     }
     [1, 10, 20, N].forEach((d) =>
-      txt(pace, { x: x(d - 1), y: base + 18, 'font-size': 8, 'font-weight': 600, fill: MUT, 'text-anchor': 'middle', class: 'lf-fade' }, String(d)),
+      txt(pace, { x: x(d - 1), y: base + 18, 'font-size': 8, 'font-weight': 600, fill: MUT, 'text-anchor': 'middle', class: 'ins-fade' }, String(d)),
     );
 
     // crosshair + readout, shown while the pointer is over the chart
@@ -170,7 +168,7 @@
         fill: PIE[i % PIE.length],
         stroke: BG,
         'stroke-width': 2,
-        class: 'pie-slice lf-fade',
+        class: 'pie-slice ins-fade',
         style: `animation-delay:${i * 0.08}s`,
       });
       s.dataset.dx = Math.cos(am) * 7;

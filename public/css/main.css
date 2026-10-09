@@ -1695,29 +1695,19 @@ h1,
   display: block;
 }
 
-/* ---- bills tab: Lieflat Charts grammar, Wire preset (grey ladder + one fluorescent orange) ------------------------------
-   Paper cards (24px, no border/shadow), Inter, conclusion titles, uppercase source lines.
-   Tokens from lieflat-charts/mono-tokens.js; dark mode uses its "dark card" palette. */
-.lieflat {
-  --lf-bg: #f0f0ee;
-  --lf-ink: #1f1e1c;
-  --lf-muted: rgba(31, 30, 28, 0.6);
-  --lf-faint: rgba(31, 30, 28, 0.32);
-  --lf-grid: rgba(31, 30, 28, 0.16);
-  --lf-note: rgba(31, 30, 28, 0.72);
-  --lf-hero: #f5572f;
-  font-family: 'Inter', sans-serif;
-  color: var(--lf-ink);
+/* ---- Insights tab: the app's palette, ink greys + one crimson focal point ------------------------------
+   The tokens follow the app's light/dark variables, so no separate dark block is needed. */
+.insights {
+  --ins-bg: var(--card);
+  --ins-ink: var(--ink);
+  --ins-muted: color-mix(in srgb, var(--ink) 60%, transparent);
+  --ins-faint: color-mix(in srgb, var(--ink) 32%, transparent);
+  --ins-grid: color-mix(in srgb, var(--ink) 16%, transparent);
+  --ins-note: color-mix(in srgb, var(--ink) 72%, transparent);
+  --ins-hero: var(--crimson);
+  color: var(--ins-ink);
 }
-[data-bs-theme='dark'] .lieflat {
-  --lf-bg: #1c1c1a;
-  --lf-ink: #f0f0ee;
-  --lf-muted: rgba(240, 240, 238, 0.6);
-  --lf-faint: rgba(240, 240, 238, 0.32);
-  --lf-grid: rgba(240, 240, 238, 0.16);
-  --lf-note: rgba(240, 240, 238, 0.72);
-}
-.lf-pagehead {
+.ins-pagehead {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
@@ -1725,64 +1715,64 @@ h1,
   gap: 1.5rem;
   padding: 2.6rem 4px 1.6rem;
 }
-.lf-pagehead h1 {
+.ins-pagehead h1 {
   font-family: 'Inter', sans-serif;
   font-size: 22px;
   font-weight: 800;
   letter-spacing: -0.02em;
   margin: 0;
 }
-.lf-pagehead p {
+.ins-pagehead p {
   font-size: 12px;
-  color: var(--lf-muted);
+  color: var(--ins-muted);
   margin: 5px 0 0;
   line-height: 1.7;
 }
 /* insights headline: one number + pace against last month */
-.lf-hero {
+.ins-hero {
   display: flex;
   align-items: baseline;
   gap: 10px;
   margin-top: 14px;
 }
-.lf-hero b {
+.ins-hero b {
   font-size: 44px;
   font-weight: 800;
   letter-spacing: -0.03em;
   line-height: 1;
 }
-.lf-hero span {
+.ins-hero span {
   font-size: 13px;
-  color: var(--lf-muted);
+  color: var(--ins-muted);
 }
-.lf-pace {
+.ins-pace {
   font-size: 13px;
   font-weight: 600;
   margin: 10px 0 0;
 }
-.lf-pace.up {
-  color: var(--lf-hero);
+.ins-pace.up {
+  color: var(--ins-hero);
 }
-.lf-pace.down {
-  color: var(--lf-muted);
+.ins-pace.down {
+  color: var(--ins-muted);
 }
-.lf-legend {
+.ins-legend {
   display: flex;
   gap: 16px;
   font-size: 11px;
-  color: var(--lf-muted);
+  color: var(--ins-muted);
   margin-bottom: 8px;
 }
-.lf-legend span::before {
+.ins-legend span::before {
   content: '';
   display: inline-block;
   width: 18px;
   vertical-align: middle;
   margin-right: 6px;
-  border-top: 2.2px solid var(--lf-ink);
+  border-top: 2.2px solid var(--ins-ink);
 }
-.lf-legend .last::before {
-  border-top: 2px dotted var(--lf-faint);
+.ins-legend .last::before {
+  border-top: 2px dotted var(--ins-faint);
 }
 /* where it went: ranked categories with a hairline bar and the change from last month */
 .cat-rows {
@@ -1796,11 +1786,11 @@ h1,
   align-items: center;
   gap: 12px;
   padding: 9px 0;
-  border-top: 0.7px solid var(--lf-grid);
+  border-top: 0.7px solid var(--ins-grid);
   font-size: 13px;
 }
 .cat-rows li:first-child {
-  border-top-color: var(--lf-ink);
+  border-top-color: var(--ins-ink);
 }
 .cat-name {
   overflow: hidden;
@@ -1813,7 +1803,7 @@ h1,
   outline: none;
 }
 .cat-rows li.active {
-  background: var(--lf-grid);
+  background: var(--ins-grid);
 }
 .cat-swatch {
   width: 10px;
@@ -1822,7 +1812,7 @@ h1,
 }
 .cat-pct {
   text-align: right;
-  color: var(--lf-muted);
+  color: var(--ins-muted);
   font-size: 12px;
 }
 #pie {
@@ -1847,72 +1837,72 @@ h1,
 .cat-change {
   text-align: right;
   font-size: 11.5px;
-  color: var(--lf-muted);
+  color: var(--ins-muted);
 }
 .cat-change.up {
-  color: var(--lf-hero);
+  color: var(--ins-hero);
 }
 .cat-fixed {
   font-size: 11.5px;
-  color: var(--lf-muted);
+  color: var(--ins-muted);
   margin: 12px 0 0;
 }
-.lf-grid {
+.ins-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 22px;
 }
-.lf-card {
-  background: var(--lf-bg);
+.ins-card {
+  background: var(--ins-bg);
   border-radius: 24px;
   padding: 28px 28px 20px;
   min-width: 0;
 }
-.lf-card.wide {
+.ins-card.wide {
   grid-column: 1 / -1;
 }
-.lf-card h2 {
+.ins-card h2 {
   font-family: 'Inter', sans-serif;
   font-weight: 700;
   font-size: 16.5px;
   letter-spacing: -0.02em;
   margin-bottom: 3px;
 }
-.lf-card .sub {
+.ins-card .sub {
   font-size: 11.5px;
-  color: var(--lf-muted);
+  color: var(--ins-muted);
   margin-bottom: 14px;
 }
-.lf-card .src {
+.ins-card .src {
   font-size: 9.5px;
-  color: var(--lf-faint);
+  color: var(--ins-faint);
   margin-top: 10px;
   letter-spacing: 0.08em;
   font-weight: 500;
 }
-.lf-card .note {
+.ins-card .note {
   font-size: 11px;
-  color: var(--lf-note);
+  color: var(--ins-note);
   line-height: 1.65;
   margin-bottom: 16px;
 }
-.lf-card .legend {
+.ins-card .legend {
   font-size: 9px;
   letter-spacing: 0.1em;
   font-weight: 600;
-  color: var(--lf-muted);
+  color: var(--ins-muted);
   line-height: 2;
 }
-.lf-card svg {
+.ins-card svg {
   width: 100%;
   max-height: 340px;
   display: block;
   margin: 0 auto;
 }
-.lf-card svg text {
+.ins-card svg text {
   font-family: 'Inter', sans-serif;
 }
-.lf-tag {
+.ins-tag {
   display: inline-block;
   font-size: 9px;
   font-weight: 700;
@@ -1920,17 +1910,17 @@ h1,
   padding: 2px 7px;
   border-radius: 99px;
   margin: 0 6px 2px 0;
-  background: var(--lf-ink);
-  color: var(--lf-bg);
+  background: var(--ins-ink);
+  color: var(--ins-bg);
 }
-.lf-tag.ghost {
+.ins-tag.ghost {
   background: transparent;
-  color: var(--lf-ink);
-  border: 1px solid var(--lf-ink);
+  color: var(--ins-ink);
+  border: 1px solid var(--ins-ink);
 }
 
-.lf-tag.hero {
-  background: var(--lf-hero);
+.ins-tag.hero {
+  background: var(--ins-hero);
   color: #fff;
 }
 /* recommendations */
@@ -1944,10 +1934,10 @@ h1,
   grid-template-columns: 1fr auto;
   gap: 1.2rem;
   padding: 16px 0;
-  border-top: 0.7px solid var(--lf-grid);
+  border-top: 0.7px solid var(--ins-grid);
 }
 .rec-items li:first-child {
-  border-top: 0.7px solid var(--lf-ink);
+  border-top: 0.7px solid var(--ins-ink);
 }
 .rec-items h3 {
   font-family: 'Inter', sans-serif;
@@ -1958,20 +1948,20 @@ h1,
 }
 .rec-action {
   font-size: 12.5px;
-  color: var(--lf-note);
+  color: var(--ins-note);
   margin: 0 0 6px;
   max-width: 62ch;
 }
 .rec-ask {
   font-size: 11.5px;
   font-weight: 600;
-  color: var(--lf-ink);
+  color: var(--ins-ink);
   text-decoration: none;
-  border-bottom: 1px solid var(--lf-faint);
+  border-bottom: 1px solid var(--ins-faint);
 }
 .rec-ask:hover {
-  color: var(--lf-hero);
-  border-bottom-color: var(--lf-hero);
+  color: var(--ins-hero);
+  border-bottom-color: var(--ins-hero);
 }
 .rec-saving {
   text-align: right;
@@ -1981,20 +1971,20 @@ h1,
   display: block;
   font-size: 22px;
   font-weight: 800;
-  color: var(--lf-hero);
+  color: var(--ins-hero);
   letter-spacing: -0.02em;
 }
 .rec-saving span {
   font-size: 9.5px;
   letter-spacing: 0.08em;
-  color: var(--lf-muted);
+  color: var(--ins-muted);
 }
-.lf-pop {
+.ins-pop {
   transform-box: fill-box;
   transform-origin: center;
-  animation: lf-pop 0.5s cubic-bezier(0.2, 0.7, 0.3, 1.3) both;
+  animation: ins-pop 0.5s cubic-bezier(0.2, 0.7, 0.3, 1.3) both;
 }
-@keyframes lf-pop {
+@keyframes ins-pop {
   from {
     transform: scale(0);
   }
@@ -2002,27 +1992,27 @@ h1,
     transform: none;
   }
 }
-.lf-fade {
-  animation: lf-fade 0.9s ease both;
+.ins-fade {
+  animation: ins-fade 0.9s ease both;
 }
 /* F2 line draw-in */
-.lf-draw {
+.ins-draw {
   stroke-dasharray: 1;
   stroke-dashoffset: 1;
-  animation: lf-draw 1s cubic-bezier(0.4, 0, 0.2, 1) both;
+  animation: ins-draw 1s cubic-bezier(0.4, 0, 0.2, 1) both;
 }
-@keyframes lf-draw {
+@keyframes ins-draw {
   to {
     stroke-dashoffset: 0;
   }
 }
-@keyframes lf-fade {
+@keyframes ins-fade {
   from {
     opacity: 0;
   }
 }
 @media (max-width: 991px) {
-  .lf-grid {
+  .ins-grid {
     grid-template-columns: 1fr;
   }
 }
