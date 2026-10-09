@@ -18,6 +18,12 @@ block content
           .mb-3
             label.form-label(for='name')= t('Name')
             input#name.form-control(type='text', name='name', value=user.name, maxlength='80')
+          .mb-3
+            label.form-label(for='currency')= t('Currency')
+            select#currency.form-select(name='currency')
+              each c in currencies
+                option(value=c.code, selected=c.code === currency)= c.label
+            .form-text= t('Changing it relabels your amounts; it does not convert them.')
           button.btn.btn-ghost(type='submit')= t('Save')
 
     .plane.faceted.slate.mb-4
@@ -37,6 +43,47 @@ block content
             input#confirmPassword.form-control(type='password', name='confirmPassword', minlength='8', maxlength='128', autocomplete='new-password', required)
           button.btn.btn-ghost(type='submit')= t('Change password')
 
+    .plane.faceted.mb-4#two-step
+      .plane-head
+        h2= t('Two-step sign-in')
+        if twoStepOn
+          span.badge.text-bg-success= t('On')
+      .plane-body
+        if twoStepOn
+          p.small.muted= t('Each sign-in needs your password and a code from your authenticator app. To turn it off, confirm with both.')
+          form(method='POST', action='/account/2fa/disable')
+            input(type='hidden', name='_csrf', value=_csrf)
+            .row.g-2
+              .col-sm-6
+                label.form-label(for='tsPassword')= t('Current password')
+                input#tsPassword.form-control(type='password', name='currentPassword', autocomplete='current-password', required)
+              .col-sm-6
+                label.form-label(for='tsOffCode')= t('Code')
+                input#tsOffCode.form-control.num(type='text', name='code', inputmode='numeric', maxlength='7', autocomplete='one-time-code', required)
+            button.btn.btn-ghost.mt-3(type='submit')= t('Turn off two-step sign-in')
+        else if setup
+          ol.small.ps-3
+            li= t('Scan this QR code with an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password…).')
+            li= t('Type the 6-digit code it shows to finish.')
+          .two-step-setup
+            .two-step-qr!= setup.qr
+            div
+              p.small.muted.mb-1= t("Can't scan? Enter this key instead:")
+              code.two-step-key= setup.key
+              form.mt-3(method='POST', action='/account/2fa/enable')
+                input(type='hidden', name='_csrf', value=_csrf)
+                label.form-label(for='tsCode')= t('Code')
+                input#tsCode.form-control.num(type='text', name='code', inputmode='numeric', pattern='[0-9 ]{6,7}', maxlength='7', autocomplete='one-time-code', required, autofocus)
+                button.btn.btn-danger.mt-3(type='submit')= t('Turn on')
+              form.mt-2(method='POST', action='/account/2fa/cancel')
+                input(type='hidden', name='_csrf', value=_csrf)
+                button.btn.btn-link.btn-sm.p-0(type='submit')= t('Cancel')
+        else
+          p.small.muted= t('Protect your account with a code from an authenticator app as well as your password, so a stolen password alone is not enough.')
+          form(method='POST', action='/account/2fa/setup')
+            input(type='hidden', name='_csrf', value=_csrf)
+            button.btn.btn-ghost(type='submit')= t('Set up two-step sign-in')
+
     .plane(style='border-color: var(--crimson)')
       .plane-head
         h2(style='color: var(--crimson)')= t('Delete account')
@@ -45,7 +92,7 @@ block content
         form(
           method='POST',
           action='/account/delete',
-          onsubmit=`return confirm(${JSON.stringify(t('Delete your account and all data? This cannot be undone.'))})`
+          data-confirm=t('Delete your account and all data? This cannot be undone.')
         )
           input(type='hidden', name='_csrf', value=_csrf)
           button.btn.btn-danger(type='submit')= t('Delete my account')

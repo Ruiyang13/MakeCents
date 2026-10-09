@@ -1,3 +1,4 @@
+const crypto = require('node:crypto');
 const path = require('node:path');
 const express = require('express');
 const compression = require('compression');
@@ -42,6 +43,28 @@ app.set('view engine', 'pug');
 app.set('trust proxy', secure ? 1 : 0);
 app.disable('x-powered-by');
 
+// Content-Security-Policy: scripts only from this site or inline blocks carrying this request's nonce
+// (no inline event handlers, no eval). Styles allow inline style="" attributes used for bar widths and colours.
+app.use((req, res, next) => {
+  res.locals.cspNonce = crypto.randomBytes(16).toString('base64');
+  res.setHeader(
+    'Content-Security-Policy',
+    [
+      "default-src 'self'",
+      `script-src 'self' 'nonce-${res.locals.cspNonce}'`,
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "font-src 'self' https://fonts.gstatic.com",
+      "img-src 'self' data: blob:",
+      "connect-src 'self'",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "frame-ancestors 'self'",
+    ].join('; '),
+  );
+  if (secure) res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
+  next();
+});
 if (require.main === module) app.use(morgan('dev')); // no request logs in tests
 app.use(compression());
 // Images for receipt scanning arrive as base64 JSON; only that route gets a large body limit.
@@ -82,6 +105,8 @@ app.use('/vendor/fontawesome', express.static(path.join(__dirname, 'node_modules
 app.get('/', homeController.index);
 app.get('/login', userController.getLogin);
 app.post('/login', limit(60, 20), userController.postLogin);
+app.get('/login/code', userController.getLoginCode);
+app.post('/login/code', limit(15, 10), userController.postLoginCode);
 app.get('/logout', userController.logout);
 app.get('/signup', userController.getSignup);
 app.post('/signup', limit(60, 10), userController.postSignup);
@@ -89,6 +114,10 @@ app.get('/account', isAuthenticated, userController.getAccount);
 app.post('/account/profile', isAuthenticated, userController.postUpdateProfile);
 app.post('/account/password', isAuthenticated, userController.postUpdatePassword);
 app.post('/account/delete', isAuthenticated, userController.postDeleteAccount);
+app.post('/account/2fa/setup', isAuthenticated, userController.postTwoStepSetup);
+app.post('/account/2fa/enable', isAuthenticated, limit(15, 10), userController.postTwoStepEnable);
+app.post('/account/2fa/cancel', isAuthenticated, userController.postTwoStepCancel);
+app.post('/account/2fa/disable', isAuthenticated, limit(15, 10), userController.postTwoStepDisable);
 
 app.get('/finance', isAuthenticated, financeController.getFinanceAgent);
 app.post('/finance/chat', isAuthenticated, limit(1, 10), financeController.postFinanceAgentChat);
@@ -121,6 +150,11 @@ app.use((err, req, res, next) => {
 });
 
 if (require.main === module) {
+  // .env.example's placeholder secret is fine on a laptop, never on a server: anyone could forge session cookies.
+  if (process.env.NODE_ENV === 'production' && (!process.env.SESSION_SECRET || process.env.SESSION_SECRET === 'change-me')) {
+    console.error('Set SESSION_SECRET in .env before running in production.');
+    process.exit(1);
+  }
   mongoose.connect(process.env.MONGODB_URI).catch((err) => {
     console.error('MongoDB connection error. Is MongoDB running?', err.message);
     process.exit(1);

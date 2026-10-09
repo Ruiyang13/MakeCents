@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Transaction = require('../models/Transaction');
 const SavingsGoal = require('../models/SavingsGoal');
+const User = require('../models/User');
 const { detectBills, fixedClassifier } = require('./bills');
 
 // Savings goals with automatic plans. The plan answers three questions from the user's own data:
@@ -71,9 +72,10 @@ exports._planAll = planAll;
 // What's usually left over each month, and usual everyday spending per category (last 90 days / 3).
 async function monthlyPicture(userId, now) {
   const uid = new mongoose.Types.ObjectId(userId);
-  const [rows, { bills }] = await Promise.all([
+  const [rows, { bills }, currency] = await Promise.all([
     Transaction.find({ user: uid, date: { $gte: new Date(now - 90 * DAY_MS), $lte: now } }).lean(),
     detectBills(uid, now),
+    User.currencyOf(uid),
   ]);
   const isFixed = fixedClassifier(bills);
   let income = 0;
@@ -86,7 +88,7 @@ async function monthlyPicture(userId, now) {
       if (!isFixed(t)) usual[t.category] = (usual[t.category] || 0) + -t.amount / 3;
     }
   }
-  return { freeCash: r2((income - out) / 3), usual, currency: rows[0]?.currency || 'GBP' };
+  return { freeCash: r2((income - out) / 3), usual, currency };
 }
 exports._monthlyPicture = monthlyPicture;
 
@@ -95,6 +97,9 @@ exports.getGoals = async (req, res, next) => {
     const now = new Date();
     const [goals, picture] = await Promise.all([SavingsGoal.find({ user: req.user._id }).sort({ deadline: 1 }), monthlyPicture(req.user._id, now)]);
     const fmt = new Intl.NumberFormat('en-GB', { style: 'currency', currency: picture.currency });
+    // the jar that just changed: only it animates its new money dropping in (one page load only)
+    const jarFrom = req.session.jarFrom;
+    delete req.session.jarFrom;
     const fmt0 = new Intl.NumberFormat('en-GB', { style: 'currency', currency: picture.currency, maximumFractionDigits: 0 });
     res.render('finance/goals', {
       title: 'Goals',
@@ -104,6 +109,8 @@ exports.getGoals = async (req, res, next) => {
         target: g.target,
         deadline: g.deadline,
         plan,
+        drop:
+          jarFrom?.id === g._id.toString() ? { from: jarFrom.pct, label: `+${(Number.isInteger(jarFrom.added) ? fmt0 : fmt).format(jarFrom.added)}` } : null,
       })),
       freeCash: picture.freeCash,
       money: (n) => fmt.format(n),
@@ -135,13 +142,14 @@ exports.postGoal = async (req, res, next) => {
       req.flash('errors', { msg: problem });
       return res.redirect('/finance/goals');
     }
-    await SavingsGoal.create({
+    const created = await SavingsGoal.create({
       user: req.user._id,
       name,
       target: Number(target),
       deadline,
       contributions: start && Number(start) > 0 ? [{ amount: Number(start), date: now }] : [],
     });
+    if (Number(start) > 0) req.session.jarFrom = { id: created._id.toString(), pct: 0, added: Number(start) };
     req.flash('success', { msg: req.t('Goal created: {name}', { name }) });
     res.redirect('/finance/goals');
   } catch (error) {
@@ -162,6 +170,8 @@ exports.postContribution = async (req, res, next) => {
       req.flash('errors', { msg: req.t('You can take out at most {amount}.', { amount: goal.saved.toFixed(2) }) });
     } else {
       const wasFull = goal.saved >= goal.target;
+      // only money going in animates (new pieces drop into the jar)
+      if (req.body.direction !== 'take') req.session.jarFrom = { id: goal._id.toString(), pct: planFor(goal).pct, added: Number(raw) };
       goal.contributions.push({ amount: req.body.direction === 'take' ? -Number(raw) : Number(raw), date: new Date() });
       await goal.save();
       if (!wasFull && goal.saved >= goal.target) req.flash('success', { msg: req.t('🎉 {name} is fully saved!', { name: goal.name }) });

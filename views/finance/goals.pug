@@ -1,5 +1,5 @@
 extends ../layout
-include ../partials/piggy
+include ../partials/jar
 
 block content
   - const levelText = [t('Just getting started'), t('A quarter full'), t('Halfway there!'), t('Almost full'), t('Full! Goal reached 🎉')];
@@ -20,7 +20,7 @@ block content
         - const p = g.plan;
         .plane.stacked.goal-card(class=`st-${p.status}`)
           .goal-top
-            +piggy(p.pct, p.level, g.id, t('{name}: {pct}% saved', { name: g.name, pct: p.pct }))
+            +jar(p.saved > 0 ? Math.max(1, p.pct) : 0, g.id, t('{name}: {pct}% saved', { name: g.name, pct: p.pct }), g.drop)
             .goal-head
               span.goal-status= statusText[p.status]
               h2= g.name
@@ -68,7 +68,7 @@ block content
                 i.fas.fa-coins.me-1
                 = t('Add savings')
               button.btn.btn-ghost.btn-sm(type='submit', name='direction', value='take')= t('Take out')
-            form(method='POST', action=`/finance/goals/${g.id}/delete`, onsubmit=`return confirm(${JSON.stringify(t('Delete this goal?'))})`)
+            form(method='POST', action=`/finance/goals/${g.id}/delete`, data-confirm=t('Delete this goal?'))
               input(type='hidden', name='_csrf', value=_csrf)
               button.btn.btn-ghost.btn-sm.btn-icon(type='submit', aria-label=t('Delete goal'), title=t('Delete goal'))
                 i.fas.fa-trash-can
@@ -77,10 +77,10 @@ block content
       form.plane.faceted.ochre.goal-card.goal-new(method='POST', action='/finance/goals', autocomplete='off')
         input(type='hidden', name='_csrf', value=_csrf)
         .goal-top
-          +piggy(0, 0, 'new', t('An empty piggy bank for a new goal'))
+          +jar(0, 'new', t('An empty savings jar for a new goal'))
           .goal-head
             span.goal-status= t('New goal')
-            h2= t('Start a new piggy bank')
+            h2= t('Start a new savings jar')
         .row.g-2
           .col-12
             label.form-label(for='goal-name')= t('What for?')
@@ -101,5 +101,8 @@ block content
               span.cur= currencySymbol
               input#goal-start(type='text', inputmode='decimal', name='start', pattern='\\d{1,8}(\\.\\d{1,2})?', placeholder='0')
         button.btn.btn-danger.w-100.mt-3(type='submit')
-          i.fas.fa-piggy-bank.me-2
+          i.fas.fa-coins.me-2
           = t('Create goal')
+
+block scripts
+  script(src=`/js/jar.js?v=${v}`)

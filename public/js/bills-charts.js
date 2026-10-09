@@ -1,11 +1,9 @@
-// Bills tab charts, built from the Lieflat Charts templates in the WIRE preset
-// (grey ladder carries the data, one fluorescent-orange element per chart is the focal point):
-//   F2 Hairline Line (basics-gallery.html · "Thirty days of sign-ups")      -> everyday money out per day, this month
-//   F4 Tick Donut    (basics-gallery.html · "Where the traffic comes from") -> bills by category, 1 tick = 1%
+// Insights charts, Lieflat Charts grammar in the WIRE preset (grey ladder + one fluorescent-orange focal point):
+//   pace  running total of everyday spending, this month (solid) vs last month (dotted); a crosshair reads any day
+//   pie   this month's everyday spending by category; hover a slice or its row to pull it out and read it
 (() => {
   const DATA = JSON.parse(document.getElementById('bills-data').textContent);
   const tr = window.t; // translations from layout.pug (English passthrough)
-  const fmt = new Intl.NumberFormat('en-GB', { style: 'currency', currency: DATA.currency });
   const fmt0 = new Intl.NumberFormat('en-GB', { style: 'currency', currency: DATA.currency, maximumFractionDigits: 0 });
 
   // WIRE role tokens (color-presets.js). Dark mode flips the greys to paper tints; HERO stays orange.
@@ -17,20 +15,18 @@
           TXT: '#F0F0EE',
           INK: '#F0F0EE',
           MUT: 'rgba(240,240,238,.60)',
-          FAINT: 'rgba(240,240,238,.32)',
-          FLOOR: 'rgba(240,240,238,.24)',
+          FAINT: 'rgba(240,240,238,.40)',
           GRID: 'rgba(240,240,238,.16)',
-          CAT4: [HERO, '#F0F0EE', 'rgba(240,240,238,.60)', 'rgba(240,240,238,.30)'],
+          PIE: [HERO, '#F0F0EE', '#D9AE55', '#9AAB8F', '#8C9DB5', '#8F8E86', '#5A5955'],
         }
       : {
           BG: '#F0F0EE',
           TXT: '#1F1E1C',
           INK: '#22211F',
           MUT: 'rgba(31,30,28,.60)',
-          FAINT: 'rgba(31,30,28,.32)',
-          FLOOR: 'rgba(31,30,28,.24)',
+          FAINT: 'rgba(31,30,28,.40)',
           GRID: 'rgba(31,30,28,.16)',
-          CAT4: [HERO, '#22211F', '#8F8E86', '#C0BFB7'],
+          PIE: [HERO, '#22211F', '#C89B3C', '#7D8C74', '#6E7F96', '#8F8E86', '#C0BFB7'],
         };
 
   const NS = 'http://www.w3.org/2000/svg';
@@ -45,220 +41,172 @@
     n.textContent = s;
     return n;
   };
-  const tip = (n, s) => {
-    const t = document.createElementNS(NS, 'title');
-    t.textContent = s;
-    n.appendChild(t);
+  // pointer position in the SVG's own coordinates
+  const local = (svg, e) => {
+    const p = svg.createSVGPoint();
+    p.x = e.clientX;
+    p.y = e.clientY;
+    return p.matrixTransform(svg.getScreenCTM().inverse());
   };
-  const rnd = (i, k) => Math.abs(((i * 73856093) ^ (k * 19349663)) % 1000) / 1000; // deterministic
-  const D2R = Math.PI / 180;
-  const pol = (cx, cy, r, deg) => [cx + r * Math.cos(deg * D2R), cy + r * Math.sin(deg * D2R)];
-  // Unified reveal: draw when scrolled into view, click replays. Returns a redraw function.
-  const obsReveal = (id, fn) => {
-    const n = document.getElementById(id);
-    if (!n) return () => {};
-    const go = () => {
-      n.innerHTML = '';
-      fn(n);
+
+  // ════ pace ════
+  const pace = document.getElementById('pace');
+  function drawPace() {
+    if (!pace) return;
+    pace.innerHTML = '';
+    const { BG, TXT, INK, MUT, FAINT, GRID } = theme();
+    const now = DATA.thisCum;
+    const last = DATA.lastCum;
+    const N = Math.max(31, last.length);
+    const step = 352 / (N - 1);
+    const x = (i) => 24 + i * step;
+    const base = 210;
+    const max = Math.max(...now, ...last, 1);
+    const y = (v) => base - (v / max) * 170;
+    const path = (vals) => `M${vals.map((v, i) => `${x(i)} ${y(v)}`).join(' L ')}`;
+
+    for (const f of [0.5, 1]) {
+      el(pace, 'line', { x1: 24, y1: y(max * f), x2: 376, y2: y(max * f), stroke: GRID, 'stroke-width': 0.6, 'stroke-dasharray': '2 4', class: 'lf-fade' });
+      txt(pace, { x: 376, y: y(max * f) - 5, 'font-size': 8, fill: MUT, 'text-anchor': 'end', class: 'lf-fade' }, fmt0.format(max * f));
+    }
+    el(pace, 'line', { x1: 24, y1: base, x2: 376, y2: base, stroke: GRID, 'stroke-width': 0.8 });
+    if (last.length) {
+      el(pace, 'path', {
+        d: path(last),
+        fill: 'none',
+        stroke: FAINT,
+        'stroke-width': 1.6,
+        'stroke-dasharray': '1 4',
+        'stroke-linecap': 'round',
+        class: 'lf-fade',
+      });
+    }
+    const today = el(pace, 'g', {});
+    if (now.length) {
+      el(pace, 'path', { d: path(now), fill: 'none', stroke: INK, 'stroke-width': 2.2, pathLength: 1, class: 'lf-draw', style: 'animation-duration:1.2s' });
+      const i = now.length - 1;
+      el(today, 'circle', { cx: x(i), cy: y(now[i]), r: 5, fill: HERO, class: 'lf-pop', style: 'animation-delay:1s' });
+      txt(
+        today,
+        {
+          x: x(i),
+          y: y(now[i]) - 12,
+          'font-size': 11,
+          'font-weight': 800,
+          fill: TXT,
+          'text-anchor': i > N * 0.8 ? 'end' : 'middle',
+          style: `paint-order:stroke;stroke:${BG};stroke-width:4px;animation-delay:1.1s`,
+          class: 'lf-fade',
+        },
+        fmt0.format(now[i]),
+      );
+    }
+    [1, 10, 20, N].forEach((d) =>
+      txt(pace, { x: x(d - 1), y: base + 18, 'font-size': 8, 'font-weight': 600, fill: MUT, 'text-anchor': 'middle', class: 'lf-fade' }, String(d)),
+    );
+
+    // crosshair + readout, shown while the pointer is over the chart
+    const hover = el(pace, 'g', { visibility: 'hidden', 'pointer-events': 'none' });
+    const rule = el(hover, 'line', { y1: 24, y2: base, stroke: MUT, 'stroke-width': 0.8 });
+    const dotNow = el(hover, 'circle', { r: 4.5, fill: HERO, stroke: BG, 'stroke-width': 2 });
+    const dotLast = el(hover, 'circle', { r: 3.5, fill: BG, stroke: MUT, 'stroke-width': 1.5 });
+    const box = el(hover, 'rect', { width: 128, height: 50, rx: 8, fill: INK });
+    const t1 = txt(hover, { 'font-size': 9, 'font-weight': 700, fill: BG }, '');
+    const t2 = txt(hover, { 'font-size': 9, fill: BG }, '');
+    const t3 = txt(hover, { 'font-size': 9, fill: BG, opacity: 0.7 }, '');
+    const show = (e) => {
+      const i = Math.max(0, Math.min(N - 1, Math.round((local(pace, e).x - 24) / step)));
+      if (now[i] === undefined && last[i] === undefined) return;
+      hover.setAttribute('visibility', 'visible');
+      today.setAttribute('opacity', 0.25);
+      rule.setAttribute('x1', x(i));
+      rule.setAttribute('x2', x(i));
+      dotNow.setAttribute('visibility', now[i] === undefined ? 'hidden' : 'visible');
+      dotNow.setAttribute('cx', x(i));
+      dotNow.setAttribute('cy', y(now[i] || 0));
+      dotLast.setAttribute('visibility', last[i] === undefined ? 'hidden' : 'visible');
+      dotLast.setAttribute('cx', x(i));
+      dotLast.setAttribute('cy', y(last[i] || 0));
+      const bx = x(i) > 230 ? x(i) - 140 : x(i) + 12;
+      box.setAttribute('x', bx);
+      box.setAttribute('y', 26);
+      [t1, t2, t3].forEach((n, k) => {
+        n.setAttribute('x', bx + 10);
+        n.setAttribute('y', 41 + k * 13);
+      });
+      t1.textContent = tr('Day {day}', { day: i + 1 });
+      t2.textContent = now[i] === undefined ? '' : `${DATA.month}  ${fmt0.format(now[i])}`;
+      t3.textContent = last[i] === undefined ? '' : `${DATA.lastMonth}  ${fmt0.format(last[i])}`;
     };
-    const io = new IntersectionObserver(
-      (es) => {
-        if (es[0].isIntersecting) {
-          go();
-          io.disconnect();
-        }
-      },
-      { threshold: 0.3 },
-    );
-    io.observe(n);
-    n.style.cursor = 'pointer';
-    n.addEventListener('click', go);
-    return go;
-  };
+    pace.onpointermove = show;
+    pace.onpointerdown = show; // touch: tap a day
+    pace.onpointerleave = () => {
+      hover.setAttribute('visibility', 'hidden');
+      today.setAttribute('opacity', 1);
+    };
+  }
 
-  // ════ B2 · hairline line ════ one dot per day this month (future days: floor tick only).
-  // Everyday spending only (fixed costs are set apart). Orange = the biggest day.
-  const drawLine = obsReveal('dayline', (s) => {
-    const { BG, TXT, INK, MUT, FAINT, FLOOR, GRID } = theme();
-    const D = DATA.days;
-    const N = D.length;
-    const x = (i) => 30 + i * (346 / (N - 1));
-    const base = 262;
-    const max = Math.max(...D.map((d) => d.total), 1);
-    const map = (v) => base - (v / max) * 210; // from zero: height stays proportional to money
-    for (let i = 0; i < N; i++) {
-      el(s, 'line', {
-        x1: x(i),
-        y1: base,
-        x2: x(i),
-        y2: base - 7,
-        stroke: FLOOR,
-        'stroke-width': 0.6,
-        class: 'lf-fade',
-        style: `animation-delay:${i * 0.008}s`,
+  // ════ pie ════ donut with the total in the middle; slices from twelve o'clock, biggest first
+  const pie = document.getElementById('pie');
+  const rows = [...document.querySelectorAll('.cat-rows li')];
+  let focus = () => {};
+  function drawPie() {
+    if (!pie) return;
+    pie.innerHTML = '';
+    const { BG, TXT, MUT, PIE } = theme();
+    const cats = DATA.categories;
+    const total = cats.reduce((a, c) => a + c.spent, 0);
+    const C = 120;
+    const R = 104;
+    const r = 64;
+    const pt = (rad, a) => `${C + rad * Math.cos(a)} ${C + rad * Math.sin(a)}`;
+    let a0 = -Math.PI / 2;
+    const slices = cats.map((c, i) => {
+      const a1 = a0 + (c.spent / total) * Math.PI * 2;
+      const am = (a0 + a1) / 2; // two half-arcs per slice, so a single 100% slice still draws
+      const d = `M${pt(R, a0)} A${R} ${R} 0 0 1 ${pt(R, am)} A${R} ${R} 0 0 1 ${pt(R, a1)} L${pt(r, a1)} A${r} ${r} 0 0 0 ${pt(r, am)} A${r} ${r} 0 0 0 ${pt(r, a0)} Z`;
+      const s = el(pie, 'path', {
+        d,
+        fill: PIE[i % PIE.length],
+        stroke: BG,
+        'stroke-width': 2,
+        class: 'pie-slice lf-fade',
+        style: `animation-delay:${i * 0.08}s`,
       });
-    }
-    el(s, 'line', { x1: 24, y1: base, x2: 376, y2: base, stroke: GRID, 'stroke-width': 0.8, class: 'lf-fade' });
-    const past = D.map((d, i) => ({ ...d, i })).filter((d) => !d.future);
-    if (past.length) {
-      const hero = past.reduce((a, b) => (b.total > a.total ? b : a)).i;
-      // second label: the biggest day at least 4 days from the hero, so labels never collide
-      const second = past.filter((d) => Math.abs(d.i - hero) >= 4).sort((a, b) => b.total - a.total)[0]?.i;
-      const pts = past.map((d) => `${x(d.i)} ${map(d.total)}`).join(' L ');
-      el(s, 'path', { d: `M${pts}`, fill: 'none', stroke: INK, 'stroke-width': 2.2, pathLength: 1, class: 'lf-draw', style: 'animation-duration:1.2s' });
-      past.forEach((d) => {
-        const big = d.i === hero && d.total > 0;
-        const dot = el(s, 'circle', {
-          cx: x(d.i),
-          cy: map(d.total),
-          r: big ? 5.2 : 3.1,
-          fill: big ? HERO : INK,
-          stroke: big ? HERO : INK,
-          class: 'lf-pop',
-          style: `animation-delay:${0.2 + d.i * 0.03}s`,
-        });
-        tip(dot, tr('{day} {month} — {amount}', { day: d.day, month: DATA.month, amount: fmt.format(d.total) }));
-        if ((big || d.i === second) && d.total > 0) {
-          txt(
-            s,
-            {
-              x: x(d.i),
-              y: map(d.total) - 11,
-              'font-size': 9.5,
-              'font-weight': 800,
-              fill: TXT,
-              'text-anchor': 'middle',
-              style: `paint-order:stroke;stroke:${BG};stroke-width:3px;animation-delay:${1 + d.i * 0.01}s`,
-              class: 'lf-fade',
-            },
-            fmt0.format(d.total),
-          );
-        }
-      });
-    }
-    const mon = document.documentElement.lang === 'zh' ? DATA.month : DATA.month.slice(0, 3).toUpperCase();
-    [0, Math.floor((N - 1) / 2), N - 1].forEach((i) =>
-      txt(
-        s,
-        { x: x(i), y: base + 18, 'font-size': 7.5, 'font-weight': 600, fill: MUT, 'text-anchor': 'middle', 'letter-spacing': '.1em', class: 'lf-fade' },
-        tr('{mon} {day}', { mon, day: i + 1 }),
-      ),
-    );
-    txt(
-      s,
-      {
-        x: 200,
-        y: 306,
-        'font-size': 7,
-        'font-weight': 600,
-        fill: FAINT,
-        'text-anchor': 'middle',
-        'letter-spacing': '.12em',
-        class: 'lf-fade',
-        style: 'animation-delay:1.1s',
-      },
-      tr('ONE DOT = ONE DAY · FIXED COSTS NOT INCLUDED'),
-    );
-  });
-  // ════ B4 · tick donut ════ 1 tick = 1%; Wire CAT4, orange = biggest share. Used for fixed bills and everyday mix.
-  const donut = (id, parts, centerLabel) =>
-    obsReveal(id, (s) => {
-      const { BG, TXT, MUT, FAINT, CAT4 } = theme();
-      const cx = 200;
-      const cy = 148;
-      const R0 = 64;
-      let k0 = 0;
-      parts.forEach(({ label, pct, monthly }, si) => {
-        const shade = CAT4[si];
-        for (let k = 0; k < pct; k++) {
-          const idx = k0 + k;
-          const a = idx * 3.6 - 90;
-          const len = 12 + rnd(idx + 1, si + 2) * 6;
-          const [x1, y1] = pol(cx, cy, R0, a);
-          const [x2, y2] = pol(cx, cy, R0 + len, a);
-          el(s, 'line', { x1, y1, x2, y2, stroke: shade, 'stroke-width': 1.9, class: 'lf-fade', style: `animation-delay:${idx * 0.012}s` });
-          if (idx % 10 === 0) {
-            const [dx, dy] = pol(cx, cy, R0 - 5, a);
-            el(s, 'circle', { cx: dx, cy: dy, r: 0.8, fill: FAINT, class: 'lf-fade', style: `animation-delay:${idx * 0.012}s` });
-          }
-        }
-        const mid = (k0 + pct / 2) * 3.6 - 90;
-        const [lx, ly] = pol(cx, cy, R0 + 38, mid);
-        const [gx, gy] = pol(cx, cy, R0 + 20, mid);
-        el(s, 'line', {
-          x1: gx,
-          y1: gy,
-          x2: lx,
-          y2: ly,
-          stroke: FAINT,
-          'stroke-width': 0.7,
-          'stroke-dasharray': '1 3',
-          class: 'lf-fade',
-          style: `animation-delay:${0.6 + si * 0.1}s`,
-        });
-        const anchor = Math.cos(mid * D2R) > 0.3 ? 'start' : Math.cos(mid * D2R) < -0.3 ? 'end' : 'middle';
-        const lab = txt(
-          s,
-          {
-            x: lx,
-            y: ly + 3,
-            'font-size': 8,
-            'font-weight': 800,
-            fill: si === 0 ? HERO : TXT, // grey tints are too faint for text; only the focal label takes colour
-            'text-anchor': anchor,
-            'letter-spacing': '.06em',
-            style: `paint-order:stroke;stroke:${BG};stroke-width:3px;animation-delay:${0.65 + si * 0.1}s`,
-            class: 'lf-fade',
-          },
-          `${label.toUpperCase()} · ${pct}`,
-        );
-        tip(lab, tr('{cat} — {pct}% · {amount} a month', { cat: label, pct, amount: fmt.format(monthly) }));
-        k0 += pct;
-      });
-      txt(
-        s,
-        { x: cx, y: cy + 2, 'font-size': 20, 'font-weight': 800, fill: TXT, 'text-anchor': 'middle', class: 'lf-fade', style: 'animation-delay:.9s' },
-        fmt0.format(parts.reduce((a, c) => a + c.monthly, 0)),
-      );
-      txt(
-        s,
-        {
-          x: cx,
-          y: cy + 16,
-          'font-size': 7,
-          'font-weight': 600,
-          fill: MUT,
-          'text-anchor': 'middle',
-          'letter-spacing': '.1em',
-          class: 'lf-fade',
-          style: 'animation-delay:.9s',
-        },
-        centerLabel,
-      );
-      txt(
-        s,
-        {
-          x: 200,
-          y: 296,
-          'font-size': 7,
-          'font-weight': 600,
-          fill: FAINT,
-          'text-anchor': 'middle',
-          'letter-spacing': '.12em',
-          class: 'lf-fade',
-          style: 'animation-delay:1.1s',
-        },
-        tr('TWELVE O’CLOCK IS ZERO · DOT MARKS EVERY TENTH · READS CLOCKWISE'),
-      );
+      s.dataset.dx = Math.cos(am) * 7;
+      s.dataset.dy = Math.sin(am) * 7;
+      s.addEventListener('pointerenter', () => focus(i));
+      s.addEventListener('pointerleave', () => focus(-1));
+      s.addEventListener('click', () => focus(i));
+      if (rows[i]) rows[i].querySelector('.cat-swatch').style.background = PIE[i % PIE.length];
+      a0 = a1;
+      return s;
     });
+    const big = txt(pie, { x: C, y: C + 2, 'font-size': 26, 'font-weight': 800, fill: TXT, 'text-anchor': 'middle' }, '');
+    const small = txt(pie, { x: C, y: C + 20, 'font-size': 10, 'font-weight': 600, fill: MUT, 'text-anchor': 'middle', 'letter-spacing': '.04em' }, '');
+    focus = (k) => {
+      slices.forEach((s, i) => {
+        s.style.transform = i === k ? `translate(${s.dataset.dx}px, ${s.dataset.dy}px)` : '';
+        s.style.opacity = k < 0 || i === k ? 1 : 0.35;
+      });
+      rows.forEach((row, i) => row.classList.toggle('active', i === k));
+      big.textContent = k < 0 ? fmt0.format(total) : `${cats[k].pct}%`;
+      small.textContent = k < 0 ? tr('THIS MONTH') : `${cats[k].label} · ${fmt0.format(cats[k].spent)}`;
+    };
+    focus(-1);
+  }
+  rows.forEach((row, i) => {
+    row.addEventListener('mouseenter', () => focus(i));
+    row.addEventListener('mouseleave', () => focus(-1));
+    row.addEventListener('focus', () => focus(i));
+    row.addEventListener('blur', () => focus(-1));
+  });
 
-  const drawBills = donut('billdonut', DATA.composition, tr('PER MONTH'));
-  const drawMix = donut('mixdonut', DATA.everydayMix, tr('THIS MONTH'));
-
-  // Theme toggle recolours every chart.
+  drawPace();
+  drawPie();
+  // Theme toggle recolours both charts.
   new MutationObserver(() => {
-    drawLine();
-    drawBills();
-    drawMix();
+    drawPace();
+    drawPie();
   }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] });
 })();

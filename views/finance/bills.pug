@@ -4,34 +4,50 @@ block head
   link(rel='stylesheet', href='https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap')
 
 block content
-  - const short = (d) => new Date(d).toLocaleDateString(dateLocale, { day: 'numeric', month: 'short' });
-  - const badge = { overlap: t('OVERLAP'), higher: t('PRICE RISE'), inactive: t('STOPPED?'), share: t('FIXED COSTS') };
   - const sevTag = { warning: t('WARNING'), saving: t('SAVE'), tip: t('TIP') };
-  - const peakDay = days.reduce((a, d) => (d.total > a.total ? d : a), days[0]);
-  - const upper = (s) => (lang === 'zh' ? s : s.toUpperCase());
-  //- Insights tab follows the Lieflat Charts grammar in the Wire preset (grey ladder + one fluorescent-orange focal point).
+  - const signed = (n) => (n > 0 ? '+' : '−') + money0(Math.abs(n));
+  //- Insights, Copilot-style: one number, one pace chart, one ranked list, then what to do. Lieflat Wire colours.
   .container.pb-5.lieflat
     .lf-pagehead
       div
         h1= t('Insights')
-      .lf-kpis
-        div
-          b.num= money(monthSpent)
-          span= t('EVERYDAY · {month}', { month: upper(monthName) })
-        div
-          b.num= money(fixedPaid)
-          span= t('FIXED PAID · {month}', { month: upper(monthName) })
-        if bills.length
-          div
-            b.num= money(monthlyTotal)
-            span= t('BILLS / MONTH')
-          div
-            b.num= money(soon)
-            span= t('BILLS DUE IN 7 DAYS')
+        .lf-hero
+          b.num= money0(monthSpent)
+          span= t('spent in {month} so far', { month: monthName })
+        if hasLast && paceChange
+          p.lf-pace(class=paceChange > 0 ? 'up' : 'down')
+            i.fas.me-2(class=paceChange > 0 ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down')
+            = paceChange > 0 ? t('{amount} more than this point in {month}', { amount: money0(paceChange), month: lastMonthName }) : t('{amount} less than this point in {month}', { amount: money0(-paceChange), month: lastMonthName })
 
-    //- Recommendations: deterministic signals from your own data, ranked (warnings, then biggest yearly saving)
-    if recommendations.length
-      .lf-card.lf-recs.mb-4
+    .lf-grid
+      .lf-card
+        h2= t('Spending pace')
+        .lf-legend
+          span.now= monthName
+          if hasLast
+            span.last= lastMonthName
+        svg#pace(viewBox='0 0 400 250', preserveAspectRatio='xMidYMid meet', role='img', aria-label=t('Running total of everyday spending this month and last month'))
+
+      .lf-card
+        h2= t('Where it went')
+        if categories.length
+          svg#pie(viewBox='0 0 240 240', role='img', aria-label=t('Everyday spending by category this month'))
+          ul.cat-rows
+            each c, i in categories
+              li(data-i=i, tabindex='0')
+                span.cat-swatch
+                span.cat-name= c.label
+                span.cat-pct= `${c.pct}%`
+                b.num= money0(c.spent)
+                if c.change !== null
+                  small.cat-change(class=c.change > 0 ? 'up' : 'down', title=t('vs the same point in {month}', { month: lastMonthName }))= c.change ? signed(c.change) : '='
+        else
+          p.text-muted.small= t('No everyday spending yet this month')
+        if fixedMonthly
+          p.cat-fixed= t('Plus {amount} a month in fixed bills, kept apart', { amount: money0(fixedMonthly) })
+
+    if recommendations.length || alerts.length
+      .lf-card.lf-recs.mt-4
         h2= t("What I'd do next")
         ol.rec-items
           each r in recommendations
@@ -39,54 +55,21 @@ block content
               .rec-main
                 span.lf-tag(class=r.severity === 'warning' ? 'hero' : r.severity === 'tip' ? 'ghost' : '')= sevTag[r.severity]
                 h3= r.title
-                p.rec-evidence= r.evidence
-                p.rec-action= r.action
-                a.rec-ask(href=`/finance?q=${encodeURIComponent(r.ask)}`)
-                  = t('Ask {app}: “{q}”', { app: appName, q: r.ask })
-                  i.fas.fa-arrow-right.ms-2
+                p.rec-action
+                  = r.action
+                  a.rec-ask.ms-2(href=`/finance?q=${encodeURIComponent(r.ask)}`, title=r.ask, aria-label=t('Ask {app}: “{q}”', { app: appName, q: r.ask }))
+                    i.fas.fa-arrow-right
               if r.savingLabel
                 .rec-saving
                   b.num= r.savingLabel
                   span= t('/ YEAR')
-
-    .lf-grid
-      //- F2 · Hairline Line (basics-gallery.html · "Thirty days of sign-ups"), Wire colours
-      .lf-card
-        h2= monthSpent ? t('{amount} of everyday spending so far in {month}', { amount: money(monthSpent), month: monthName }) : t('No everyday spending yet in {month}', { month: monthName })
-        .sub= t('orange = biggest day · fixed costs not included')
-        svg#dayline(viewBox='0 0 400 320', preserveAspectRatio='xMidYMid meet', role='img', aria-label=t('Daily spending in {month}', { month: monthName }))
-
-      //- F4 · Tick Donut, everyday spending by category this month
-      .lf-card
-        if everydayMix.length
-          h2= t('{cat} is {pct}% of everyday spending', { cat: cat(everydayMix[0].name), pct: everydayMix[0].pct })
-          .sub= t('one tick = 1%')
-          svg#mixdonut(viewBox='0 0 400 320', preserveAspectRatio='xMidYMid meet', role='img', aria-label=t('Everyday spending by category this month'))
-        else
-          h2= t('No everyday spending yet this month')
-
-      //- F4 · Tick Donut (basics-gallery.html · "Where the traffic comes from"), Wire CAT4
-      .lf-card
-        if composition.length
-          h2= t('Of your fixed bills, {cat} takes {pct}%', { cat: cat(composition[0].name), pct: composition[0].pct })
-          .sub= t('one tick = 1%')
-          svg#billdonut(viewBox='0 0 400 320', preserveAspectRatio='xMidYMid meet', role='img', aria-label=t('Composition of monthly bills by category'))
-        else
-          h2= t('No recurring bills yet')
-
-      each ins in insights
-        .lf-card
-          span.lf-badge= badge[ins.type]
-          h2= ins.title
-          .sub.mb-0= ins.text
-
-      .lf-card.wide.lf-ask
-        h2= t('Ask {app} about your spending', { app: appName })
-        .chips.mt-2
-          each q in askBills
-            a.chip(href=`/finance?q=${encodeURIComponent(t(q))}`)= t(q)
-
-  script#bills-data(type='application/json')!= JSON.stringify(chartData).replace(/</g, '\\u003c')
+          each a in alerts
+            li
+              .rec-main
+                span.lf-tag.ghost= t('BILLS')
+                h3= a.title
+                p.rec-action= a.text
 
 block scripts
+  script#bills-data(type='application/json')!= JSON.stringify(chartData).replace(/</g, '\\u003c')
   script(src=`/js/bills-charts.js?v=${v}`)

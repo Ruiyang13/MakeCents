@@ -73,7 +73,7 @@ block content
                     span.small.muted= t('No budget')
 
 block scripts
-  script.
+  script(nonce=cspNonce).
     // "Use my usual" fills only empty boxes, so budgets you already set are never overwritten.
     document.getElementById('fill-usual').addEventListener('click', function () {
       document.querySelectorAll('#budgets-form input[data-usual]').forEach(function (inp) {

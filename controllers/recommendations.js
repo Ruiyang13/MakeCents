@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Transaction = require('../models/Transaction');
 const Budget = require('../models/Budget');
+const User = require('../models/User');
 const { detectBills, fixedClassifier, OVERLAP_GROUPS } = require('./bills');
 const { CATEGORY_NAMES } = require('../config/categories');
 
@@ -15,13 +16,13 @@ const identity = (s, vars) => (vars ? s.replace(/\{(\w+)\}/g, (m, k) => vars[k] 
 
 async function buildRecommendations(userId, { now = new Date(), t = identity, lang = 'en' } = {}) {
   const uid = new mongoose.Types.ObjectId(userId);
-  const [rows, billData, budgets] = await Promise.all([
+  const [rows, billData, budgets, currency] = await Promise.all([
     Transaction.find({ user: uid, date: { $gte: new Date(now - 200 * DAY_MS), $lte: now } }).lean(),
     detectBills(uid, now),
     Budget.find({ user: uid }).lean(),
+    User.currencyOf(uid),
   ]);
   if (!rows.length) return [];
-  const currency = rows[0].currency || 'GBP';
   const fmt = new Intl.NumberFormat(lang === 'zh' ? 'zh-CN' : 'en-GB', { style: 'currency', currency, maximumFractionDigits: 0 });
   const money = (n) => fmt.format(n);
   const isFixed = fixedClassifier(billData.bills);
@@ -29,7 +30,7 @@ async function buildRecommendations(userId, { now = new Date(), t = identity, la
   const crept = new Set();
   const ago = (d) => (now - new Date(d)) / DAY_MS;
   const out = rows.filter((x) => x.amount < 0).map((x) => ({ ...x, spent: -x.amount, age: ago(x.date) }));
-  const everyday = out.filter((x) => !isFixed(x));
+  const everyday = out.filter((x) => !isFixed(x) && x.category !== 'Savings'); // savings transfers aren't spending
   const recs = [];
 
   // 1. Category creep: last 30 days vs the average of the three 30-day windows before it.

@@ -1,0 +1,3 @@
+//- drop: { from, label } for the jar money was just put into; only that jar animates the new money dropping in
+mixin jar(pct, seed, label, drop)
+  canvas.jar(width='170', height='222', data-pct=pct, data-from=drop && drop.from, data-added=drop && drop.label, data-seed=seed, role='img', aria-label=label)

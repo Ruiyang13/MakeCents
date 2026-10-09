@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Transaction = require('../models/Transaction');
 const Budget = require('../models/Budget');
+const User = require('../models/User');
 const { QUICK_CATEGORIES } = require('../config/categories');
 
 // Budgets page: every spending category in one table, edited and saved in one go.
@@ -16,15 +17,14 @@ exports.getBudgets = async (req, res, next) => {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const usualStart = new Date(now.getFullYear(), now.getMonth() - 3, 1); // three whole months before this one
-    const [rows, budgets, latest] = await Promise.all([
+    const [rows, budgets, currency] = await Promise.all([
       Transaction.aggregate([
         { $match: { user: uid, amount: { $lt: 0 }, date: { $gte: usualStart, $lte: now } } },
         { $group: { _id: { cat: '$category', thisMonth: { $gte: ['$date', monthStart] } }, total: { $sum: '$amount' } } },
       ]),
       Budget.find({ user: uid }).lean(),
-      Transaction.findOne({ user: uid }).sort({ date: -1 }).lean(),
+      User.currencyOf(uid),
     ]);
-    const currency = latest?.currency || 'GBP';
     const fmt = new Intl.NumberFormat('en-GB', { style: 'currency', currency });
     const spent = {};
     const usual = {};

@@ -10,7 +10,7 @@ html.h-100(lang=lang)
       href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M4 6 22 2 18 20Z" fill="%23b4232a"/><path d="M10 12 28 10 22 30 6 26Z" fill="%2317140f" opacity=".85"/></svg>'
     )
     //- Stamp the theme before CSS loads so there is no light flash in dark mode.
-    script.
+    script(nonce=cspNonce).
       (function () {
         var t = null;
         try {
@@ -20,7 +20,7 @@ html.h-100(lang=lang)
         document.documentElement.setAttribute('data-bs-theme', t);
       })();
     //- Client-side translations: window.t('English text', { vars }) for strings built in browser scripts
-    script.
+    script(nonce=cspNonce).
       window.I18N = !{ i18nClient };
       window.t = function (s, v) {
         var d = window.I18N[s] || s;

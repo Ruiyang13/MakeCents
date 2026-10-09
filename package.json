@@ -36,6 +36,7 @@
     "passport": "^0.7.0",
     "passport-local": "^1.0.0",
     "pug": "^3.0.4",
+    "qrcode": "^1.5.4",
     "validator": "^13.15.35",
     "zod": "^4.5.4"
   },

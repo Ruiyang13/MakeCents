@@ -717,24 +717,34 @@ h1,
   }
 }
 
-/* "+" attach button in the chat bar */
-.composer .attach {
-  width: 40px;
-  height: 40px;
-  flex: none;
-  display: grid;
-  place-items: center;
-  margin: 0 0 0 -0.4rem;
-  border-radius: 7px;
+/* receipt drop zone under the chat bar */
+.scan-drop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  margin: 0.6rem 0 0;
+  padding: 0.7rem 1rem;
+  border: 1.5px dashed var(--line-strong);
+  border-radius: 10px;
   color: var(--ink-2);
+  font-size: 0.85rem;
+  text-align: center;
   cursor: pointer;
   transition:
     background 0.15s,
+    border-color 0.15s,
     color 0.15s;
 }
-.composer .attach:hover {
-  background: var(--paper-2);
+.scan-drop i {
+  font-size: 1.1rem;
+}
+.scan-drop:hover,
+.scan-drop:focus-visible,
+.scan-drop.over {
+  border-color: var(--crimson);
   color: var(--crimson);
+  background: color-mix(in srgb, var(--crimson) 6%, transparent);
 }
 /* voice input */
 .composer .mic {
@@ -868,6 +878,13 @@ h1,
   color: var(--ochre);
   font-weight: 800;
   display: block;
+}
+/* money-movement proposals (sandbox) stand out from budget proposals; the code box sits beside the buttons */
+.approval.money {
+  border-color: var(--crimson);
+}
+.approval .code-input {
+  width: 7.5rem;
 }
 .approval.done {
   border-color: color-mix(in srgb, var(--sage) 60%, var(--line));
@@ -1579,7 +1596,7 @@ h1,
 }
 .goal-top {
   display: grid;
-  grid-template-columns: 130px 1fr;
+  grid-template-columns: 170px 1fr;
   gap: 1rem;
   align-items: center;
 }
@@ -1673,109 +1690,11 @@ h1,
   text-align: left;
 }
 
-/* the piggy bank */
-.piggy {
-  width: 130px;
-  height: auto;
-  overflow: visible;
-  --pig: #f4c9c3;
-  --pig-dark: #e7a79e;
-  --gold: #e0b04a;
-  --gold-hi: #f6d98a;
+/* the savings jar (drawn by public/js/jar.js) */
+.jar {
+  display: block;
 }
-[data-bs-theme='dark'] .piggy {
-  --pig: #6e4442;
-  --pig-dark: #5a3634;
-  --gold: #d9ae55;
-  --gold-hi: #f2d17e;
-}
-.pig-body {
-  fill: var(--pig);
-}
-.pig-part {
-  fill: var(--pig-dark);
-  stroke: var(--ink);
-  stroke-width: 2.5;
-}
-.pig-outline {
-  fill: none;
-  stroke: var(--ink);
-  stroke-width: 3;
-}
-.pig-snout {
-  fill: var(--pig-dark);
-  stroke: var(--ink);
-  stroke-width: 2.5;
-}
-.pig-nostril,
-.pig-eye,
-.pig-slot {
-  fill: var(--ink);
-}
-.pig-eye-happy,
-.pig-tail {
-  fill: none;
-  stroke: var(--ink);
-  stroke-width: 3;
-  stroke-linecap: round;
-}
-.pig-gold,
-.pig-gold-wave {
-  fill: var(--gold);
-}
-.pig-coin {
-  fill: var(--gold-hi);
-  stroke: color-mix(in srgb, var(--gold) 70%, var(--ink));
-  stroke-width: 1.5;
-}
-.pig-spark {
-  fill: var(--gold);
-  animation: pig-twinkle 1.6s ease-in-out infinite;
-  transform-box: fill-box;
-  transform-origin: center;
-}
-.pig-spark:nth-of-type(2) {
-  animation-delay: 0.5s;
-}
-.pig-spark:nth-of-type(3) {
-  animation-delay: 1s;
-}
-/* gold rises on load, then the surface keeps a gentle wave */
-.pig-fill {
-  animation: pig-rise 1.4s cubic-bezier(0.2, 0.7, 0.2, 1) both;
-}
-.pig-gold-wave {
-  animation: pig-wave 3.2s linear infinite;
-}
-.lv-4 {
-  animation: pig-bounce 2.4s ease-in-out infinite;
-  transform-origin: 50% 100%;
-}
-@keyframes pig-rise {
-  from {
-    transform: translateY(var(--rise));
-  }
-}
-@keyframes pig-wave {
-  to {
-    transform: translateX(60px);
-  }
-}
-@keyframes pig-twinkle {
-  50% {
-    transform: scale(0.4) rotate(45deg);
-    opacity: 0.4;
-  }
-}
-@keyframes pig-bounce {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-4px);
-  }
-}
+
 /* ---- bills tab: Lieflat Charts grammar, Wire preset (grey ladder + one fluorescent orange) ------------------------------
    Paper cards (24px, no border/shadow), Inter, conclusion titles, uppercase source lines.
    Tokens from lieflat-charts/mono-tokens.js; dark mode uses its "dark card" palette. */
@@ -1819,27 +1738,124 @@ h1,
   margin: 5px 0 0;
   line-height: 1.7;
 }
-.lf-kpis {
+/* insights headline: one number + pace against last month */
+.lf-hero {
   display: flex;
-  gap: 2.2rem;
-  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 14px;
 }
-.lf-kpis div {
-  display: flex;
-  flex-direction: column;
-}
-.lf-kpis b {
-  font-size: 26px;
+.lf-hero b {
+  font-size: 44px;
   font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1.1;
+  letter-spacing: -0.03em;
+  line-height: 1;
 }
-.lf-kpis span {
-  font-size: 9.5px;
-  font-weight: 500;
-  letter-spacing: 0.08em;
+.lf-hero span {
+  font-size: 13px;
   color: var(--lf-muted);
-  margin-top: 4px;
+}
+.lf-pace {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 10px 0 0;
+}
+.lf-pace.up {
+  color: var(--lf-hero);
+}
+.lf-pace.down {
+  color: var(--lf-muted);
+}
+.lf-legend {
+  display: flex;
+  gap: 16px;
+  font-size: 11px;
+  color: var(--lf-muted);
+  margin-bottom: 8px;
+}
+.lf-legend span::before {
+  content: '';
+  display: inline-block;
+  width: 18px;
+  vertical-align: middle;
+  margin-right: 6px;
+  border-top: 2.2px solid var(--lf-ink);
+}
+.lf-legend .last::before {
+  border-top: 2px dotted var(--lf-faint);
+}
+/* where it went: ranked categories with a hairline bar and the change from last month */
+.cat-rows {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+}
+.cat-rows li {
+  display: grid;
+  grid-template-columns: 10px 1fr 2.6rem 4.5rem 3.6rem;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 0;
+  border-top: 0.7px solid var(--lf-grid);
+  font-size: 13px;
+}
+.cat-rows li:first-child {
+  border-top-color: var(--lf-ink);
+}
+.cat-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cat-rows li {
+  cursor: default;
+  transition: background 0.15s;
+  outline: none;
+}
+.cat-rows li.active {
+  background: var(--lf-grid);
+}
+.cat-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+.cat-pct {
+  text-align: right;
+  color: var(--lf-muted);
+  font-size: 12px;
+}
+#pie {
+  display: block;
+  width: 100%;
+  max-width: 230px;
+  margin: 6px auto 4px;
+}
+.pie-slice {
+  cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    opacity 0.2s ease;
+}
+#pace {
+  cursor: crosshair;
+  touch-action: pan-y;
+}
+.cat-rows b {
+  text-align: right;
+}
+.cat-change {
+  text-align: right;
+  font-size: 11.5px;
+  color: var(--lf-muted);
+}
+.cat-change.up {
+  color: var(--lf-hero);
+}
+.cat-fixed {
+  font-size: 11.5px;
+  color: var(--lf-muted);
+  margin: 12px 0 0;
 }
 .lf-grid {
   display: grid;
@@ -1896,17 +1912,6 @@ h1,
 .lf-card svg text {
   font-family: 'Inter', sans-serif;
 }
-.lf-badge {
-  display: inline-block;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  padding: 3px 10px;
-  border-radius: 99px;
-  margin-bottom: 10px;
-  border: 1.5px solid var(--lf-ink);
-}
-
 .lf-tag {
   display: inline-block;
   font-size: 9px;
@@ -1951,11 +1956,6 @@ h1,
   letter-spacing: -0.01em;
   margin: 6px 0 4px;
 }
-.rec-evidence {
-  font-size: 12px;
-  color: var(--lf-muted);
-  margin: 0 0 4px;
-}
 .rec-action {
   font-size: 12.5px;
   color: var(--lf-note);
@@ -1988,21 +1988,6 @@ h1,
   font-size: 9.5px;
   letter-spacing: 0.08em;
   color: var(--lf-muted);
-}
-.lf-badge.hero {
-  border-color: var(--lf-hero);
-  color: var(--lf-hero);
-}
-.lf-ask .chip {
-  font-family: 'Inter', sans-serif;
-  background: transparent;
-  border-color: var(--lf-ink);
-  color: var(--lf-ink);
-}
-.lf-ask .chip:hover {
-  background: var(--lf-ink);
-  color: var(--lf-bg);
-  border-color: var(--lf-ink);
 }
 .lf-pop {
   transform-box: fill-box;
@@ -2072,4 +2057,30 @@ footer.site-foot {
   .msg {
     max-width: 100%;
   }
+}
+
+/* two-step sign-in setup (Account page) */
+.two-step-setup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  align-items: flex-start;
+}
+.two-step-qr {
+  width: 168px;
+  flex: none;
+  padding: 6px;
+  background: #fff; /* QR codes need a light background, also in dark mode */
+  border-radius: 8px;
+}
+.two-step-qr svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.two-step-key {
+  display: inline-block;
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  word-break: break-all;
 }

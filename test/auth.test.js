@@ -31,6 +31,19 @@ describe('Auth & route protection', () => {
     expect(res.text).to.include('PlanSmart');
   });
 
+  it('sends a nonce-based CSP, and every inline script carries the nonce', async () => {
+    const res = await request(app).get('/').expect(200);
+    const nonce = /script-src 'self' 'nonce-([^']+)'/.exec(res.headers['content-security-policy'])[1];
+    expect(res.headers['content-security-policy']).to.include("object-src 'none'").and.not.include('unsafe-eval');
+    const inline = res.text.match(/<script(?![^>]*\bsrc=)(?![^>]*application\/json)[^>]*>/g);
+    expect(inline).to.have.length.above(0);
+    inline.forEach((tag) => expect(tag).to.include(`nonce="${nonce}"`));
+    // inline event handlers would be blocked by the CSP: none may exist in any template
+    const fs = require('node:fs');
+    const views = fs.readdirSync('views', { recursive: true }).filter((f) => f.endsWith('.pug'));
+    views.forEach((f) => expect(fs.readFileSync(`views/${f}`, 'utf8'), f).to.not.match(/\bon(submit|click|change|load|input)=/));
+  });
+
   it('redirects signed-out users away from the assistant', async () => {
     const res = await request(app).get('/finance').expect(302);
     expect(res.headers.location).to.equal('/login');
@@ -52,13 +65,15 @@ describe('Auth & route protection', () => {
     const res = await agent
       .post('/signup')
       .type('form')
-      .send({ _csrf: csrf, name: 'Ada', email: 'Ada@Example.com', password: 'correct-horse', confirmPassword: 'correct-horse' })
+      .send({ _csrf: csrf, name: 'Ada', email: 'Ada@Example.com', password: 'correct-horse', confirmPassword: 'correct-horse', currency: 'EUR' })
       .expect(302);
     expect(res.headers.location).to.equal('/finance');
     const page = await agent.get('/finance').expect(200);
-    expect(page.text).to.include('Everyday spending').and.include('id="scan-file"'); // calendar + the chat bar's + upload
+    expect(page.text).to.include('Everyday spending').and.include('id="scan-drop"'); // calendar + the upload zone under the chat bar
     const user = await User.findOne({ email: 'ada@example.com' }).lean();
     expect(user.password).to.not.equal('correct-horse'); // hashed
+    expect(user.currency).to.equal('EUR');
+    expect((await agent.get('/finance/budgets').expect(200)).text).to.include('€'); // the chosen currency, before any transactions
     await agent.get('/logout').expect(302);
     await agent.get('/finance').expect(302);
   });
@@ -77,6 +92,70 @@ describe('Auth & route protection', () => {
     const csrf = csrfOf((await agent.get('/login')).text);
     const res = await agent.post('/login').type('form').send({ _csrf: csrf, email: 'ada@example.com', password: 'correct-horse' }).expect(302);
     expect(res.headers.location).to.equal('/finance');
+  });
+
+  it('two-step sign-in: set up with a code, then every sign-in needs a fresh code', async () => {
+    const totp = require('../config/totp');
+    const agent = request.agent(app);
+    let csrf = csrfOf((await agent.get('/signup')).text);
+    const creds = { email: '2fa@example.com', password: 'correct-horse' };
+    await agent
+      .post('/signup')
+      .type('form')
+      .send({ _csrf: csrf, ...creds, confirmPassword: creds.password, currency: 'GBP' })
+      .expect(302);
+    csrf = csrfOf((await agent.get('/account')).text);
+    await agent.post('/account/2fa/setup').type('form').send({ _csrf: csrf }).expect(302);
+    const page = (await agent.get('/account')).text;
+    expect(page).to.include('<svg'); // QR code
+    const secret = /class="two-step-key">([A-Z2-7 ]+)</.exec(page)[1].replace(/ /g, '');
+    await agent.post('/account/2fa/enable').type('form').send({ _csrf: csrf, code: 'abcdef' }).expect(302);
+    expect((await User.findOne({ email: creds.email }).lean()).totp).to.equal(undefined);
+    const enableCode = totp.codeAt(secret);
+    await agent.post('/account/2fa/enable').type('form').send({ _csrf: csrf, code: enableCode }).expect(302);
+    expect((await User.findOne({ email: creds.email }).lean()).totp.secret).to.equal(secret);
+    await agent.get('/logout');
+
+    // The password alone no longer signs you in.
+    const next = request.agent(app);
+    csrf = csrfOf((await next.get('/login')).text);
+    const login = await next
+      .post('/login')
+      .type('form')
+      .send({ _csrf: csrf, ...creds })
+      .expect(302);
+    expect(login.headers.location).to.equal('/login/code');
+    await next.get('/finance').expect(302).expect('Location', '/login');
+    csrf = csrfOf((await next.get('/login/code')).text);
+    // A code that was already used (replay) is refused.
+    const replay = await next.post('/login/code').type('form').send({ _csrf: csrf, code: enableCode }).expect(302);
+    expect(replay.headers.location).to.equal('/login/code');
+    const ok = await next
+      .post('/login/code')
+      .type('form')
+      .send({ _csrf: csrf, code: totp.codeAt(secret, totp.stepAt() + 1) })
+      .expect(302);
+    expect(ok.headers.location).to.equal('/finance');
+    await next.get('/finance').expect(200);
+
+    // Turning it off needs the password and a code.
+    csrf = csrfOf((await next.get('/account')).text);
+    await next
+      .post('/account/2fa/disable')
+      .type('form')
+      .send({ _csrf: csrf, currentPassword: 'wrong-pass', code: totp.codeAt(secret) });
+    expect((await User.findOne({ email: creds.email }).lean()).totp.secret).to.equal(secret);
+    await next
+      .post('/account/2fa/disable')
+      .type('form')
+      .send({ _csrf: csrf, currentPassword: creds.password, code: totp.codeAt(secret) });
+    expect((await User.findOne({ email: creds.email }).lean()).totp).to.equal(undefined);
+  });
+
+  it('two-step codes match the RFC 6238 test vectors', () => {
+    const { _hotp } = require('../config/totp');
+    const key = Buffer.from('12345678901234567890');
+    expect([59, 1111111109, 20000000000].map((s) => _hotp(key, Math.floor(s / 30), 8))).to.deep.equal(['94287082', '07081804', '65353130']);
   });
 
   it('deleting the account removes the user and their transactions', async () => {
@@ -101,7 +180,7 @@ describe('Auth & route protection', () => {
       await agent
         .post('/signup')
         .type('form')
-        .send({ _csrf: csrf, email: 'rec@example.com', password: 'correct-horse', confirmPassword: 'correct-horse' })
+        .send({ _csrf: csrf, email: 'rec@example.com', password: 'correct-horse', confirmPassword: 'correct-horse', currency: 'GBP' })
         .expect(302);
       user = await User.findOne({ email: 'rec@example.com' });
       csrf = csrfOf((await agent.get('/finance/record')).text);
@@ -281,6 +360,17 @@ describe('Auth & route protection', () => {
       expect(zh.text).to.include('你的预算');
     });
 
+    it('Insights: one pace chart and a category list compared with last month', async () => {
+      const now = new Date();
+      await Transaction.create([
+        { user: user._id, date: new Date(now.getFullYear(), now.getMonth(), 1), amount: -50, merchant: 'Bistro', category: 'DiningOut' },
+        { user: user._id, date: new Date(now.getFullYear(), now.getMonth() - 1, 1), amount: -20, merchant: 'Bistro', category: 'DiningOut' },
+      ]);
+      const page = await agent.get('/finance/bills').expect(200);
+      expect(page.text).to.include('id="pace"').and.include('class="cat-rows"').and.include('more than this point in');
+      expect(page.text).to.not.include('mixdonut');
+    });
+
     it('Goals: create, add, cap take-outs at what is saved, protect from other users, delete', async () => {
       const SavingsGoal = require('../models/SavingsGoal');
       const future = new Date(Date.now() + 90 * 864e5).toISOString().slice(0, 10);
@@ -293,7 +383,10 @@ describe('Auth & route protection', () => {
       await add('take', '50');
       expect((await SavingsGoal.findById(g._id)).saved).to.equal(450);
       const page = await agent.get('/finance/goals').expect(200);
-      expect(page.text).to.include('Tokyo trip').and.include('class="piggy lv-1"').and.include('a week');
+      expect(page.text).to.include('Tokyo trip').and.include('class="jar"').and.include('data-pct="30"').and.include('a week');
+      // only the jar money just went into animates: it knows its level before (6%) and what was added; once only
+      expect(page.text).to.include('data-from="6"').and.include('data-added="+£400"');
+      expect((await agent.get('/finance/goals').expect(200)).text).to.not.include('data-from');
       // invalid goals are rejected
       await agent.post('/finance/goals').type('form').send({ _csrf: csrf, name: 'Past', target: '10', deadline: '2020-01-01' }).expect(302);
       expect(await SavingsGoal.exists({ user: user._id, name: 'Past' })).to.equal(null);

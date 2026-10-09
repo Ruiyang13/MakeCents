@@ -78,6 +78,8 @@
         date: args.date || t('today'),
       });
     }
+    if (tool === 'transfer_to_goal') return t('Move {amount} from the sandbox account to {goal}', { amount: args.amount, goal: args.goal });
+    if (tool === 'pay_bill') return t('Pay {merchant} {amount} from the sandbox account', { merchant: args.merchant, amount: args.amount });
     return `${tool} ${JSON.stringify(args)}`;
   }
 
@@ -85,7 +87,7 @@
   function approvalCard(a) {
     clearWelcome();
     const card = document.createElement('div');
-    card.className = 'approval';
+    card.className = a.tier === 'move' ? 'approval money' : 'approval';
     const text = document.createElement('div');
     text.innerHTML = `<span class="tag">${t('Needs your approval')}</span>`;
     const what = document.createElement('span');
@@ -110,7 +112,28 @@
     scrollDown();
   }
 
-  async function decide(a, verb, card, text) {
+  // Moving money with two-step sign-in on: the server asks for a fresh authenticator code before it runs.
+  function askCode(a, card, text, message) {
+    const row = card.lastElementChild;
+    const code = Object.assign(document.createElement('input'), {
+      className: 'form-control form-control-sm num code-input',
+      inputMode: 'numeric',
+      maxLength: 7,
+      placeholder: t('6-digit code'),
+      autocomplete: 'one-time-code',
+    });
+    code.setAttribute('aria-label', message);
+    const ok = Object.assign(document.createElement('button'), { type: 'button', className: 'btn btn-sm btn-danger', textContent: t('Confirm') });
+    ok.onclick = () => code.value.trim() && decide(a, 'confirm', card, text, code.value.trim());
+    code.onkeydown = (e) => e.key === 'Enter' && ok.click();
+    const no = Object.assign(document.createElement('button'), { type: 'button', className: 'btn btn-sm btn-ghost', textContent: t('Reject') });
+    no.onclick = () => decide(a, 'reject', card, text);
+    row.replaceChildren(code, ok, no);
+    text.querySelector('.tag').textContent = message;
+    code.focus();
+  }
+
+  async function decide(a, verb, card, text, code) {
     card.querySelectorAll('button').forEach((b) => {
       b.disabled = true;
     });
@@ -119,8 +142,10 @@
       const r = await fetch(`/finance/actions/${encodeURIComponent(a.id)}/${verb}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf() },
+        body: JSON.stringify(code ? { code } : {}),
       });
       const d = await r.json();
+      if (d.needCode) return askCode(a, card, text, d.error);
       if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
       tag = { confirmed: t('Applied'), rejected: t('Rejected'), error: t('Failed: {error}', { error: d.action.error }) }[d.action.status];
       card.classList.add(d.action.status === 'error' ? 'failed' : 'done');
@@ -387,9 +412,28 @@
       scrollDown();
     }
 
-    scanInput.addEventListener('change', async () => {
+    // Drop an image on the zone under the chat bar (or anywhere in the composer); clicking it opens the picker.
+    const composer = document.querySelector('.composer');
+    const zone = document.getElementById('scan-drop');
+    composer.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      zone.classList.add('over');
+    });
+    composer.addEventListener('dragleave', (e) => {
+      if (!composer.contains(e.relatedTarget)) zone.classList.remove('over');
+    });
+    composer.addEventListener('drop', (e) => {
+      e.preventDefault();
+      zone.classList.remove('over');
+      scanFile(e.dataTransfer.files[0]);
+    });
+    scanInput.addEventListener('change', () => {
       const file = scanInput.files[0];
       scanInput.value = '';
+      scanFile(file);
+    });
+
+    async function scanFile(file) {
       if (!file || sendBtn.disabled) return;
       if (!file.type.startsWith('image/')) return addAI(t('That file is not an image. Attach a photo of a receipt or a payment screenshot.'), 'error');
       setBusy(true);
@@ -426,7 +470,7 @@
       } finally {
         setBusy(false);
       }
-    });
+    }
 
     saveScan.addEventListener('click', async () => {
       const items = [...rowsEl.children].map((r) => r.read()).filter(Boolean);

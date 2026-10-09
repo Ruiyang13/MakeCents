@@ -18,3 +18,9 @@ document.querySelectorAll('[data-lang-toggle]').forEach((btn) => {
     window.location.reload();
   });
 });
+
+// Forms that ask first (delete goal / entry / account). A data attribute, not onsubmit=, so the CSP can forbid inline handlers.
+document.addEventListener('submit', (e) => {
+  const msg = e.target.dataset?.confirm;
+  if (msg && !window.confirm(msg)) e.preventDefault();
+});

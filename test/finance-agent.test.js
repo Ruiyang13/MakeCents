@@ -159,4 +159,95 @@ describe('Finance Agent tools & permissions', () => {
     expect(hm.fixed.map((x) => [x.merchant, x.amount, x.day])).to.deep.equal([['Rent', 1480, 4]]);
     expect(hm.fixedTotal).to.equal('£1,480.00');
   });
+
+  describe('sandbox money movement (move tier)', () => {
+    const SavingsGoal = require('../models/SavingsGoal');
+    const SandboxAccount = require('../models/SandboxAccount');
+    const User = require('../models/User');
+    const totp = require('../config/totp');
+    const balance = async () => (await SandboxAccount.open(userId)).balance;
+
+    before(async () => {
+      // a monthly Netflix bill (detected as a recurring bill) so pay_bill has an allowed payee
+      const now = new Date();
+      await Transaction.create(
+        [1, 2, 3, 4].map((k) => ({
+          user: userId,
+          date: new Date(now.getFullYear(), now.getMonth() - k, 5, 12),
+          amount: -12.99,
+          merchant: 'Netflix',
+          category: 'Subscriptions',
+        })),
+      );
+    });
+    beforeEach(async () => {
+      await SandboxAccount.deleteMany({});
+      await SavingsGoal.deleteMany({});
+      await User.deleteMany({});
+      await SavingsGoal.create({ user: userId, name: 'Japan trip', target: 3000, deadline: new Date(Date.now() + 200 * 86400000) });
+    });
+
+    it('transfer_to_goal only proposes; confirming moves the money and logs balances before and after', async () => {
+      const res = await call('transfer_to_goal', { goal: 'japan TRIP', amount: 50 });
+      expect(res.status).to.equal('awaiting_user_confirmation');
+      expect(await balance()).to.equal(SandboxAccount.START_BALANCE);
+      const action = await _decideAction(userId, res.actionId, true);
+      expect(action).to.include({ status: 'confirmed', tier: 'move' });
+      expect(action.result).to.include({ to: 'Japan trip', amount: 50, balanceBefore: 2500, balanceAfter: 2450, pctBefore: 0 });
+      expect(await balance()).to.equal(2450);
+      expect((await SavingsGoal.findOne({ user: userId })).saved).to.equal(50);
+      expect(await Transaction.exists({ user: userId, source: 'sandbox', category: 'Savings', amount: -50 })).to.not.equal(null);
+    });
+
+    it('refuses unknown goals, more than a goal needs, and amounts over the per-move limit', async () => {
+      expect((await call('transfer_to_goal', { goal: 'Yacht', amount: 10 })).error).to.match(/No savings goal/);
+      expect((await call('transfer_to_goal', { goal: 'Japan trip', amount: 501 })).error).to.match(/limit per move/);
+      await SavingsGoal.create({ user: userId, name: 'Nearly', target: 100, deadline: new Date(Date.now() + 86400000 * 30), contributions: [{ amount: 90 }] });
+      expect((await call('transfer_to_goal', { goal: 'Nearly', amount: 20 })).error).to.match(/only needs 10/);
+      expect(await AgentAction.countDocuments({ status: 'pending' })).to.equal(0);
+    });
+
+    it('enforces the daily limit across confirmed moves', async () => {
+      for (const amount of [500, 500]) {
+        const { actionId } = await call('transfer_to_goal', { goal: 'Japan trip', amount });
+        expect((await _decideAction(userId, actionId, true)).status).to.equal('confirmed');
+      }
+      expect((await call('transfer_to_goal', { goal: 'Japan trip', amount: 1 })).error).to.match(/daily limit/);
+    });
+
+    it('can never overdraw the sandbox account, even with proposals made while money was there', async () => {
+      await SandboxAccount.open(userId);
+      await SandboxAccount.updateOne({ user: userId }, { balance: 30 });
+      const a = await call('transfer_to_goal', { goal: 'Japan trip', amount: 20 });
+      const b = await call('transfer_to_goal', { goal: 'Japan trip', amount: 20 });
+      expect((await _decideAction(userId, a.actionId, true)).status).to.equal('confirmed');
+      const second = await _decideAction(userId, b.actionId, true);
+      expect(second.status).to.equal('error');
+      expect(await balance()).to.equal(10);
+      expect((await SavingsGoal.findOne({ user: userId })).saved).to.equal(20);
+    });
+
+    it('pay_bill pays only detected bills, near their usual amount', async () => {
+      expect((await call('pay_bill', { merchant: 'Amazon', amount: 10 })).error).to.match(/not one of the user's active recurring bills/);
+      expect((await call('pay_bill', { merchant: 'Netflix', amount: 100 })).error).to.match(/20% above/);
+      const { actionId } = await call('pay_bill', { merchant: 'netflix', amount: 12.99 });
+      const action = await _decideAction(userId, actionId, true);
+      expect(action.result).to.include({ to: 'Netflix', balanceBefore: 2500, balanceAfter: 2487.01 });
+    });
+
+    it('with two-step sign-in on, confirming a money move needs a fresh code', async () => {
+      const secret = totp.newSecret();
+      await User.create({ _id: userId, email: 'mover@example.com', password: 'correct-horse', totp: { secret } });
+      const { actionId } = await call('transfer_to_goal', { goal: 'Japan trip', amount: 25 });
+      expect(await _decideAction(userId, actionId, true)).to.deep.equal({ needCode: true });
+      expect(await _decideAction(userId, actionId, true, { code: '000000' === totp.codeAt(secret) ? '111111' : '000000' })).to.deep.equal({ needCode: true });
+      expect((await AgentAction.findById(actionId)).status).to.equal('pending'); // nothing changed yet
+      const code = totp.codeAt(secret);
+      expect((await _decideAction(userId, actionId, true, { code })).status).to.equal('confirmed');
+      expect(await balance()).to.equal(2475);
+      // budgets (write tier) don't need a code
+      const budget = await call('set_budget', { category: 'DiningOut', monthlyLimit: 90 });
+      expect((await _decideAction(userId, budget.actionId, true)).status).to.equal('confirmed');
+    });
+  });
 });

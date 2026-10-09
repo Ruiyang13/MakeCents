@@ -1,0 +1,17 @@
+extends ../layout
+
+block content
+  .container.auth-wrap
+    .auth-card
+      .plane.stacked.faceted.p-4.p-md-5
+        span.eyebrow= t('Two-step sign-in')
+        h1.h2.mt-2.mb-3= t('Enter your code')
+        p.muted= t('Open your authenticator app and type the 6-digit code for {app}.', { app: appName })
+        form(method='POST', action='/login/code')
+          input(type='hidden', name='_csrf', value=_csrf)
+          .mb-4
+            label.form-label(for='code')= t('Code')
+            input#code.form-control.form-control-lg.num(type='text', name='code', inputmode='numeric', pattern='[0-9 ]{6,7}', maxlength='7', autocomplete='one-time-code', required, autofocus)
+          button.btn.btn-danger.btn-lg.w-100(type='submit')= t('Sign in')
+        p.mt-4.mb-0.small
+          a(href='/login')= t('Use a different account')

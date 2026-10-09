@@ -83,7 +83,7 @@ block content
                         span.hist-tag.warn= f.text
                   span.hist-amt.num(class=tx.amount > 0 ? 'in' : '') #{ tx.amount > 0 ? '+' : '−' }#{ money(Math.abs(tx.amount)) }
                   if tx.deletable
-                    form.hist-del(method='POST', action=`/finance/record/${tx.id}/delete`, onsubmit=`return confirm(${JSON.stringify(t('Delete this entry?'))})`)
+                    form.hist-del(method='POST', action=`/finance/record/${tx.id}/delete`, data-confirm=t('Delete this entry?'))
                       input(type='hidden', name='_csrf', value=_csrf)
                       button(type='submit', aria-label=t('Delete {merchant}', { merchant: tx.merchant }), title=t('Delete'))
                         i.fas.fa-xmark

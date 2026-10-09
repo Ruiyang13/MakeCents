@@ -2,23 +2,27 @@
 
 AI personal finance assistant (FinTechathon 2026 International Track, Topic A: Personal Finance Assistant).
 It reads a user's transactions, explains where the money goes, helps set budgets and savings goals, and warns
-before overspending. English / 中文, light / dark mode.
+before overspending. English / 中文, light / dark mode, currency chosen at sign-up.
+
+Technical documentation (architecture, algorithms, security design): [docs/TECHNICAL.md](docs/TECHNICAL.md).
 
 ## Features
 
-| Tab           | What it does                                                                                                                                                                                                                                         |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Assistant** | Chat with the agent (Claude) in English or Chinese; voice input; **+** uploads a receipt or payment screenshot, AI reads it and you confirm every row. This month's everyday-spending calendar, with fixed costs listed apart. Chat history is kept. |
-| **Insights**  | Ranked recommendations with evidence and estimated yearly savings; day-by-day everyday spending; everyday and fixed-bill composition (Lieflat Charts, Wire style); detected recurring bills, price rises, overlapping subscriptions.                 |
-| **Record**    | Card-style bookkeeping (卡片式记账): tap a category, key in the amount. Budget bars per card. Searchable, filterable spending history grouped by day.                                                                                                |
-| **Budgets**   | Every category's monthly budget in one table, with usual spending and progress. Budgets repeat every month.                                                                                                                                          |
-| **Goals**     | Savings goals with a piggy bank that fills up, and an automatic plan: per week / per month, whether it fits what's usually left over, which categories to trim, or a realistic date.                                                                 |
+| Tab           | What it does                                                                                                                                                                                                                                                            |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Assistant** | Chat with the agent (Claude) in English or Chinese; voice input; click or drop a receipt or payment screenshot under the chat bar, AI reads it and you confirm every row. This month's everyday-spending calendar, with fixed costs listed apart. Chat history is kept. |
+| **Insights**  | This month's spending against last month at the same point (interactive pace chart), a category pie chart with changes, then ranked recommendations with estimated yearly savings and bill alerts.                                                                      |
+| **Record**    | Card-style bookkeeping (卡片式记账): tap a category, key in the amount. Budget bars per card. Searchable, filterable spending history grouped by day.                                                                                                                   |
+| **Budgets**   | Every category's monthly budget in one table, with usual spending and progress. Budgets repeat every month.                                                                                                                                                             |
+| **Goals**     | Savings goals with a glass jar of coins and notes that fills up (only new money drops in), and an automatic plan: per week / per month, whether it fits what's usually left over, which categories to trim, or a realistic date.                                        |
 
 ### Safety model
 
 - **Read tier:** analysis tools run automatically and are logged.
 - **Write tier:** the agent can only _propose_ changes (record spending, set budgets); nothing happens until the user presses Confirm.
-- **No money movement:** there is no tool for payments or transfers.
+- **Money movement, sandbox only:** the agent can move money from a simulated sandbox account into the user's own savings goals or pay a detected bill. Every move needs confirmation (plus an authenticator code if two-step sign-in is on), with limits of 500 a move and 1,000 a day, an atomic balance check, and before/after balances in the operation log. There is no tool for real money, paying anyone else, or editing transactions.
+- **Two-step sign-in:** optional authenticator-app codes (TOTP), set up on the Account page.
+- **Content-Security-Policy:** scripts only from the app itself or inline blocks with a per-request nonce.
 - Every tool call is recorded in an operation log (`/finance/audit`).
 - Scanned images: text in the image is treated as data; every row is validated and reviewed by the user before saving.
 
@@ -39,7 +43,7 @@ Never commit `.env` (it holds the API key); it is in `.gitignore`.
 ## Test
 
 ```bash
-npm test                  # 64 tests: auth, CSRF, permissions, bills, recommendations, goals, i18n, styles
+npm test                  # 74 tests: auth, CSRF, permissions, bills, recommendations, goals, i18n, styles
 npm run lint              # eslint + prettier
 npm run check-tools       # smoke-test the agent's tools against seeded data
 ```

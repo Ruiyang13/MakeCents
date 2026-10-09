@@ -9,9 +9,9 @@ describe('Stylesheet', () => {
   const required = {
     budgets: ['.budget-table', '.budget-input', '.budget-table .progress-col'],
     record: ['.rec-grid', '.rec-card', '.rec-budget', '.rec-keypad', '.rec-sheet', '.hist-row', '.hist-search', '.hist-filter'],
-    goals: ['.goals-grid', '.goal-card', '.piggy', '.pig-gold', '.pig-fill'],
+    goals: ['.goals-grid', '.goal-card', '.jar', '.goal-plan'],
     assistant: ['.chat-log', '.composer', '.cal-cell', '.hm-gradient', '.approval'],
-    insights: ['.lf-card', '.lf-kpis', '.lf-tag', '.rec-items', '.rec-saving'],
+    insights: ['.lf-card', '.lf-hero', '.cat-rows', '.lf-tag', '.rec-items', '.rec-saving'],
   };
   for (const [page, selectors] of Object.entries(required)) {
     it(`has the ${page} page styles`, () => {

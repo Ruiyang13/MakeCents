@@ -5,6 +5,7 @@ const z = require('zod');
 const Transaction = require('../models/Transaction');
 const AgentAction = require('../models/AgentAction');
 const Budget = require('../models/Budget');
+const User = require('../models/User');
 const { QUICK_CATEGORIES, CATEGORY_STYLE } = require('../config/categories');
 const { detectBills, spendingHistory, LOOKBACK_DAYS } = require('./bills');
 
@@ -22,7 +23,7 @@ const MAX_ITEMS = 30;
 const DELETABLE_SOURCES = ['manual', 'scan'];
 
 const fmtFor = (currency) => new Intl.NumberFormat('en-GB', { style: 'currency', currency });
-const accountCurrency = async (userId) => (await Transaction.findOne({ user: userId }).sort({ date: -1 }).lean())?.currency || 'GBP';
+const accountCurrency = (userId) => User.currencyOf(userId);
 
 // Same rules for keypad entries and scanned rows. Returns { problem } or a clean entry.
 function validateEntry({ category, amount, note, date }) {
@@ -40,7 +41,8 @@ function validateEntry({ category, amount, note, date }) {
     String(note || '')
       .trim()
       .slice(0, 80) || meta.label;
-  return { meta, value, when, merchant };
+  // today's entries are stored at noon; before noon that would hide them from every "up to now" query
+  return { meta, value, when: when > new Date() ? new Date() : when, merchant };
 }
 
 const toDoc = (userId, currency, e, source) => ({

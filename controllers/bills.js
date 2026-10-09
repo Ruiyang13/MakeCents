@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const Transaction = require('../models/Transaction');
+const User = require('../models/User');
 // required lazily below: recommendations.js requires this module too
 const lazyRecs = () => require('./recommendations');
 
@@ -52,7 +53,7 @@ async function detectBills(userId, now = new Date(), { t = (s, v) => (v ? s.repl
   })
     .sort({ date: 1 })
     .lean();
-  const currency = rows.at(-1)?.currency || 'GBP';
+  const currency = await User.currencyOf(userId);
   const fmt = new Intl.NumberFormat('en-GB', { style: 'currency', currency });
   const money = (n) => fmt.format(n);
 
@@ -243,61 +244,66 @@ exports.getBills = async (req, res, next) => {
   try {
     const data = await detectBills(req.user._id, new Date(), { t: req.t });
     const fmt = new Intl.NumberFormat('en-GB', { style: 'currency', currency: data.currency });
-    // F4 tick donut takes four segments at most (Wire CAT4): top three categories + Other.
-    const top = data.byCategory.slice(0, 3);
-    const rest = data.byCategory.slice(3).reduce((a, c) => a + c.monthly, 0);
-    const parts = rest > 0 ? [...top, { category: 'Other', monthly: rest }] : top;
-    const pct = percentages(parts.map((p) => p.monthly));
-    const composition = parts.map((p, i) => ({ name: p.category, label: req.cat(p.category), monthly: p.monthly, pct: pct[i] }));
-    const soon = data.upcoming.filter((b) => b.daysToDue <= 7).reduce((a, b) => a + b.monthly, 0);
-
-    // One query feeds the daily line and the everyday mix (this month).
+    // Copilot-style insights: this month's everyday spending against last month at the same point,
+    // one cumulative pace line, and a ranked category list. Fixed costs are set apart.
     const now = new Date();
-    const rows = await Transaction.find({ user: req.user._id, date: { $gte: new Date(now - LOOKBACK_DAYS * DAY_MS), $lte: now } })
-      .sort({ date: -1, createdAt: -1 })
-      .limit(1000)
-      .lean();
-    const isFixed = fixedClassifier(data.bills);
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const rows = await Transaction.find({ user: req.user._id, date: { $gte: prevStart, $lte: now } }).lean();
+    const isFixed = fixedClassifier(data.bills);
+    const today = now.getDate();
     const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-    // Day-by-day chart = everyday spending only; fixed costs are totalled separately so rent day doesn't dominate.
-    const days = Array.from({ length: daysInMonth }, (_, i) => ({ day: i + 1, total: 0, future: i + 1 > now.getDate() }));
-    let fixedPaid = 0;
+    const prevDays = new Date(now.getFullYear(), now.getMonth(), 0).getDate();
+    const thisDaily = Array(daysInMonth).fill(0);
+    const lastDaily = Array(prevDays).fill(0);
+    const thisByCat = {};
+    const lastByCat = {}; // last month up to the same day of the month
     for (const t of rows) {
       const d = new Date(t.date);
-      if (t.amount >= 0 || d < monthStart) continue;
-      if (isFixed(t)) fixedPaid += -t.amount;
-      else days[d.getDate() - 1].total = r2(days[d.getDate() - 1].total + -t.amount);
+      if (t.amount >= 0 || d < prevStart || isFixed(t) || t.category === 'Savings') continue; // savings transfers aren't spending
+      const day = d.getDate();
+      if (d >= monthStart) {
+        thisDaily[day - 1] += -t.amount;
+        thisByCat[t.category] = (thisByCat[t.category] || 0) + -t.amount;
+      } else {
+        lastDaily[day - 1] += -t.amount;
+        if (day <= today) lastByCat[t.category] = (lastByCat[t.category] || 0) + -t.amount;
+      }
     }
-    const monthSpent = r2(days.reduce((a, d) => a + d.total, 0));
-    // Everyday spending by category this month (fixed costs excluded): top three + Other for the tick donut.
-    const everydayByCat = {};
-    for (const t of rows) {
-      if (t.amount < 0 && new Date(t.date) >= monthStart && !isFixed(t)) everydayByCat[t.category] = (everydayByCat[t.category] || 0) + -t.amount;
-    }
-    const catSorted = Object.entries(everydayByCat).sort((a, b) => b[1] - a[1]);
-    const catParts = catSorted.slice(0, 3).map(([name, monthly]) => ({ name, monthly: r2(monthly) }));
-    const catRest = catSorted.slice(3).reduce((a, [, v]) => a + v, 0);
-    if (catRest > 0) catParts.push({ name: 'Other', monthly: r2(catRest) });
-    const catPct = percentages(catParts.map((p) => p.monthly));
-    const everydayMix = catParts.map((p, i) => ({ ...p, label: req.cat(p.name), pct: catPct[i] }));
+    const cumulative = (a) => a.reduce((acc, v) => [...acc, r2((acc.at(-1) || 0) + v)], []);
+    const thisCum = cumulative(thisDaily).slice(0, today);
+    const lastCum = cumulative(lastDaily);
+    const monthSpent = thisCum.at(-1) || 0;
+    const hasLast = lastCum.at(-1) > 0;
+    const lastSoFar = hasLast ? lastCum[Math.min(today, prevDays) - 1] : 0;
+    const names = Object.keys(thisByCat).sort((x, y) => thisByCat[y] - thisByCat[x]);
+    const row = (name, list) => {
+      const spent = r2(list.reduce((a, n) => a + (thisByCat[n] || 0), 0));
+      return { name, label: req.cat(name), spent, change: hasLast ? r2(spent - list.reduce((a, n) => a + (lastByCat[n] || 0), 0)) : null };
+    };
+    const categories = names.slice(0, 6).map((n) => row(n, [n]));
+    if (names.length > 6) categories.push(row('Other', names.slice(6)));
+    percentages(categories.map((c) => c.spent)).forEach((pct, i) => (categories[i].pct = pct));
+    const monthName = now.toLocaleDateString(res.locals.dateLocale, { month: 'long' });
+    const lastMonthName = prevStart.toLocaleDateString(res.locals.dateLocale, { month: 'long' });
     const recommendations = await lazyRecs().buildRecommendations(req.user._id, { now, t: req.t, lang: req.lang });
+    // bill alerts the recommendations don't already cover (they handle overlaps and price rises)
+    const alerts = data.insights.filter((i) => i.type === 'inactive' || i.type === 'share');
 
     res.render('finance/bills', {
       title: 'Insights',
-      ...data,
       money: (n) => fmt.format(n),
       money0: (n) => new Intl.NumberFormat('en-GB', { style: 'currency', currency: data.currency, maximumFractionDigits: 0 }).format(n),
-      chartData: { currency: data.currency, days, composition, everydayMix, month: now.toLocaleDateString(res.locals.dateLocale, { month: 'long' }) },
-      days,
+      chartData: { currency: data.currency, thisCum, lastCum: hasLast ? lastCum : [], month: monthName, lastMonth: lastMonthName, categories },
       monthSpent,
-      fixedPaid: r2(fixedPaid),
-      monthName: now.toLocaleDateString(res.locals.dateLocale, { month: 'long' }),
-      composition,
-      everydayMix,
+      hasLast,
+      paceChange: r2(monthSpent - lastSoFar),
+      monthName,
+      lastMonthName,
+      categories,
+      fixedMonthly: data.monthlyTotal,
       recommendations,
-      soon,
-      askBills: ['Which subscriptions could I cancel?', 'How can I lower my biggest bills?', 'Did any of my bills go up?', '我每个月固定支出是多少？'],
+      alerts,
     });
   } catch (error) {
     next(error);

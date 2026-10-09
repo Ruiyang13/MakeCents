@@ -60,16 +60,19 @@ block content
                     button.chip(type='button')= t(q)
           .composer
             .composer-box
-              //- + attaches a receipt or payment screenshot; Claude reads it and you review before anything is saved
-              label.attach(for='scan-file', title=t('Upload a receipt or payment screenshot'), aria-label=t('Upload a receipt or payment screenshot'))
-                i.fas.fa-plus
-              input#scan-file.visually-hidden(type='file', accept='image/*')
               textarea#message-input(rows='1', maxlength='2000', placeholder=t('Ask about your money…'), aria-label=t('Message'))
               //- Voice input: browser speech recognition fills the box; you still press send
               button#mic-button.mic(type='button', aria-label=t('Voice input'), title=t('Voice input'), hidden)
                 i.fas.fa-microphone
               button#send-button.btn.btn-danger.send(type='button', aria-label=t('Send'))
                 i.fas.fa-arrow-up
+            //- Receipt or payment screenshot: click or drop; Claude reads it and you review before anything is saved
+            label#scan-drop.scan-drop(for='scan-file')
+              i.fas.fa-receipt
+              span
+                b= t('Upload a receipt or payment screenshot')
+                = ' · ' + t('or drop an image here')
+            input#scan-file.visually-hidden(type='file', accept='image/*')
 
       .col-lg-4.d-flex.flex-column.gap-4
         if heatmap
@@ -143,9 +146,16 @@ block content
                   = t('Only proposed. Nothing changes until you confirm.')
               li
                 span.glyph(style='background: var(--crimson)')
+                  i.fas.fa-money-bill-transfer
+                span
+                  b= t('Move money (sandbox only)')
+                  = t('Only from the simulated sandbox account, to your own goals or bills. Max {per} a move, {day} a day. Always needs your confirmation, plus a code if two-step sign-in is on.', { per: sandbox.perMove, day: sandbox.perDay })
+                  span.d-block.mt-1.num= t('Sandbox balance: {amount}', { amount: sandbox.balance })
+              li
+                span.glyph(style='background: var(--ink-2)')
                   i.fas.fa-ban
                 span
-                  b= t('Move money')
+                  b= t('Real money, other people, editing history')
                   = t('Impossible. The assistant has no such tool.')
             a.small.fw-bold.d-inline-block.mt-3(href='/finance/audit', target='_blank')
               = t('View operation log')
