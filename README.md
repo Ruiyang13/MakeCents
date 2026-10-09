@@ -10,6 +10,7 @@ Submission documents:
 - [Security self-assessment](docs/SECURITY.md): permission tiers, controls, known-risk list
 - [Test cases](docs/TEST-CASES.md): every automated test, generated from a real run
 - [Execution evidence](docs/evidence/README.md): scripted sandbox scenario with its operation log (CSV/JSON)
+- [Demo video script](docs/DEMO-SCRIPT.md) and [submission checklist](docs/SUBMISSION.md)
 
 ## Features
 
