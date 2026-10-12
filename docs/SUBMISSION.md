@@ -15,7 +15,9 @@ FinTechathon 2026 International Track, Topic A. Deadline: **20 October 2026, 23:
 
 - [ ] Run `npm test`, `npm run evidence` and `npm run test-cases` once more and commit the regenerated files.
 - [ ] After recording the video, download the operation log (Operation log → Download CSV) and add it to `docs/evidence/`.
-- [ ] Repository visibility: public, or judges invited.
+- [ ] Repository visibility: public, or judges invited (it is private now: GitHub returns 404 to visitors).
+- [ ] Decide the project's own licence: `package.json` says MIT but there is no `LICENSE` file. Add one (e.g. MIT) or set
+      `"license": "UNLICENSED"` to keep all rights; the rules leave IP with the team either way.
 - [ ] Every document and the video in English.
 - [ ] Team registered; team composition meets the rules (2–5 members, at least 60% non-Chinese nationals, enrolled at overseas universities).
 - [ ] Decide who attends the final in Shenzhen (21–23 November 2026); at least one member in person.

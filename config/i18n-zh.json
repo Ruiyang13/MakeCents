@@ -36,7 +36,6 @@
   "Building monthly summary...": "正在生成月度汇总…",
   "CATEGORY": "类别",
   "Cancel": "取消",
-  "Card-style bookkeeping · 卡片式记账": "卡片式记账",
   "Category, row {n}": "类别，第 {n} 行",
   "Change password": "修改密码",
   "Check each charge: most bank fees can be avoided by switching account type or paying on time.": "逐笔核对：大多数银行费用可以通过更换账户类型或按时还款避免。",
@@ -377,7 +376,6 @@
   "Behind": "落后了",
   "Done": "已完成",
   "Deadline passed": "已过期限",
-  "Savings goals · 储蓄目标": "储蓄目标",
   "What are you saving for?": "你在为什么存钱？",
   "Set a target and a date; the plan works out how much to put aside and whether it fits your month. The app never moves money: you log what you set aside.": "设定目标金额和日期，计划会算出每次该存多少，以及是否适合你每月的收支。应用不会转移资金：你只需记录自己存下的钱。",
   "Usually left over each month": "平时每月结余",
@@ -433,7 +431,6 @@
   "{amount} out": "支出 {amount}",
   "Added": "手动",
   "Monthly budget": "每月预算",
-  "Monthly budgets · 每月预算": "每月预算",
   "Your budgets": "你的预算",
   "Set every category in one place. A budget repeats every month until you change it.": "在一个地方设置所有类别。预算每月自动沿用，直到你修改为止。",
   "Budgeted / month": "每月预算合计",
@@ -541,5 +538,8 @@
   "Refused": "已拒绝执行",
   "PlanSmart uses Claude, an AI model by Anthropic. To answer you, your messages, the transaction data the assistant looks up and any images you upload are sent to Anthropic for processing. Nothing is sent anywhere else, and images are not stored.": "PlanSmart 使用 Anthropic 的 AI 模型 Claude。为了回答你的问题，你发送的消息、助手查询到的交易数据以及你上传的图片会发送给 Anthropic 处理。这些数据不会发送到其他任何地方，图片也不会被保存。",
   "I understand my data is processed by AI as described above.": "我了解我的数据会按上述方式由 AI 处理。",
-  "Please confirm you understand how the AI processes your data.": "请确认你了解 AI 如何处理你的数据。"
+  "Please confirm you understand how the AI processes your data.": "请确认你了解 AI 如何处理你的数据。",
+  "Monthly budgets": "每月预算",
+  "Savings goals": "储蓄目标",
+  "Card-style bookkeeping": "卡片式记账"
 }
