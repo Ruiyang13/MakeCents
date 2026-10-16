@@ -1,4 +1,4 @@
-# MakeCents
+# MakeCents (厘明)
 
 AI personal finance assistant (FinTechathon 2026 International Track, Topic A: Personal Finance Assistant).
 It reads a user's transactions, explains where the money goes, helps set budgets and savings goals, and warns

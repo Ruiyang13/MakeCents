@@ -27,6 +27,8 @@ exports.middleware = (req, res, next) => {
   req.cat = (key) => catName(req.lang, key);
   res.locals.cat = req.cat;
   res.locals.dateLocale = req.lang === 'zh' ? 'zh-CN' : 'en-GB';
+  // the app's Chinese name; the English one is app.locals.appName
+  if (req.lang === 'zh') res.locals.appName = '厘明';
   // Browser scripts get the dictionary only when it is needed.
   res.locals.i18nClient = req.lang === 'zh' ? JSON.stringify(ZH).replace(/</g, '\\u003c') : '{}';
   next();

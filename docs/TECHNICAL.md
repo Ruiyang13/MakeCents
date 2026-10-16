@@ -4,7 +4,7 @@ FinTechathon 2026 · International Track · Topic A (Personal Finance Assistant)
 
 **Team:** Yang Zhuo, Du Ruiyang, Mo Hanqi, Lin Haoyang
 
-MakeCents is a personal finance assistant built around an AI agent (Claude) that works on the user's own
+MakeCents (Chinese name 厘明) is a personal finance assistant built around an AI agent (Claude) that works on the user's own
 transaction data. It answers questions in plain English or Chinese, finds recurring bills and savings
 opportunities, plans savings goals, reads receipts and payment screenshots, and proposes changes
 (budgets, new records, and money movements inside a simulated sandbox account) that the user approves before

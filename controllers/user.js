@@ -140,7 +140,8 @@ exports.getAccount = async (req, res, next) => {
   try {
     // While setting up two-step sign-in, the new secret waits in the session until a code proves the app has it.
     const setup = req.session.totpSetup;
-    const qr = setup && (await QRCode.toString(totp.otpauthUrl(setup, req.user.email, res.locals.appName), { type: 'svg', margin: 1 }));
+    // the English name, so the authenticator entry is the same whatever the page language
+    const qr = setup && (await QRCode.toString(totp.otpauthUrl(setup, req.user.email, req.app.locals.appName), { type: 'svg', margin: 1 }));
     res.render('account/profile', {
       title: 'Account',
       currencies: currencyOptions(req.lang),

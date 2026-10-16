@@ -385,6 +385,9 @@ describe('Auth & route protection', () => {
       expect(page.text).to.include('<html class="h-100" lang="zh"').and.include('花了什么？').and.include('餐饮');
       const en = await request(app).get('/').set('Accept-Language', 'zh-CN,zh;q=0.9').expect(200);
       expect(en.text).to.include('开始使用'); // first visit follows the browser language
+      // the app's Chinese name in Chinese, the English one otherwise
+      expect(page.text).to.match(/<title>[^<]*· 厘明<\/title>/);
+      expect((await agent.get('/finance/record').set('Cookie', 'lang=en').expect(200)).text).to.match(/<title>[^<]*· MakeCents<\/title>/);
     });
 
     it('Budgets page: saves every category at once; blank removes; one bad amount saves nothing', async () => {
