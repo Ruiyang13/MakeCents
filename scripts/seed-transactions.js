@@ -29,6 +29,8 @@ const SavingsGoal = require('../models/SavingsGoal');
 const Transaction = require('../models/Transaction');
 const SandboxAccount = require('../models/SandboxAccount');
 const AgentAction = require('../models/AgentAction');
+const Budget = require('../models/Budget');
+const FixedCost = require('../models/FixedCost');
 
 const DEMO_PASSWORD = 'fintech1234';
 const MONTHS = 6; // whole calendar months ending with the current (partial) month
@@ -338,9 +340,12 @@ async function main() {
       continue;
     }
     await Transaction.deleteMany({ user: user._id });
-    // A clean slate for demos: sandbox back to its starting balance, empty operation log (so no daily limit carries over).
+    // A clean slate for demos: sandbox back to its starting balance, empty operation log (so no daily limit carries over),
+    // no budgets or fixed-cost corrections left over from earlier runs.
     await SandboxAccount.deleteMany({ user: user._id });
     await AgentAction.deleteMany({ user: user._id });
+    await Budget.deleteMany({ user: user._id });
+    await FixedCost.deleteMany({ user: user._id });
     const txns = generateForPersona(persona, user._id);
     await Transaction.insertMany(txns);
 
