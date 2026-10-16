@@ -14,7 +14,7 @@ FinTechathon 2026 International Track, Topic A. Deadline: **20 October 2026, 23:
 ## Before submitting
 
 - [ ] Run `npm test`, `npm run evidence` and `npm run test-cases` once more and commit the regenerated files.
-- [ ] After recording the video, download the operation log (Operation log → Download CSV) and add it to `docs/evidence/`.
+- [x] Operation log from the video recording downloaded and submitted with the entry.
 - [x] Repository visibility: public.
 - [ ] Decide the project's own licence: `package.json` says MIT but there is no `LICENSE` file. Add one (e.g. MIT) or set
       `"license": "UNLICENSED"` to keep all rights; the rules leave IP with the team either way.
