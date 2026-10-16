@@ -9,7 +9,7 @@ Submission documents:
 - [Technical documentation](docs/TECHNICAL.md): architecture, core algorithms, security design
 - [Security self-assessment](docs/SECURITY.md): permission tiers, controls, known-risk list
 - [Test cases](docs/TEST-CASES.md): every automated test, generated from a real run
-- [Execution evidence](docs/evidence/README.md): scripted sandbox scenario with its operation log (CSV/JSON)
+- [Execution evidence](docs/evidence/README.md): scripted scenario with its operation log (CSV/JSON)
 - [Demo video script](docs/DEMO-SCRIPT.md) and [submission checklist](docs/SUBMISSION.md)
 
 ## Features
@@ -25,11 +25,11 @@ Submission documents:
 ### Safety model
 
 - **Read tier:** analysis tools run automatically and are logged.
-- **Write tier:** the agent can only _propose_ changes (record spending, set budgets); nothing happens until the user presses Confirm.
-- **Money movement, sandbox only:** the agent can move money from a simulated sandbox account into the user's own savings goals or pay a detected bill. Every move needs confirmation (plus an authenticator code if two-step sign-in is on), with limits of 500 a move and 1,000 a day, an atomic balance check, and before/after balances in the operation log. There is no agent tool for real money, paying anyone else, or editing transactions.
+- **Write tier:** the agent can only _propose_ changes (record spending, put money into a savings goal, set budgets); nothing happens until the user presses Confirm. A record that takes a category over its budget shows a warning on the card; it never blocks you.
+- **No bank connection:** MakeCents records what you tell it and never touches real money. There is no agent tool that pays or sends money, or edits existing transactions.
 - **Two-step sign-in:** optional authenticator-app codes (TOTP), set up on the Account page.
 - **Content-Security-Policy:** scripts only from the app itself or inline blocks with a per-request nonce.
-- **Operation log** (`/finance/audit`): every agent read, proposal, decision, refused attempt and money move, plus every change the user makes on the forms; downloadable as CSV or JSON.
+- **Operation log** (`/finance/audit`): every agent read, proposal, decision and refused attempt, plus every change the user makes on the forms; downloadable as CSV or JSON.
 - Scanned images: text in the image is treated as data; every row is validated and reviewed by the user before saving.
 
 ## Run locally
@@ -75,10 +75,10 @@ Any Node 24 host works (e.g. Render, Railway, Fly.io) with a managed MongoDB (e.
 ## Test
 
 ```bash
-npm test                  # 78 tests: auth, CSRF, CSP, prompt injection, two-step sign-in, permissions, sandbox, bills, recommendations, goals, i18n, styles
+npm test                  # 80 tests: auth, CSRF, CSP, prompt injection, two-step sign-in, permissions, budget warnings, bills, recommendations, goals, i18n, styles
 npm run lint              # eslint + prettier
 npm run check-tools       # smoke-test the agent's tools against seeded data
-npm run evidence          # scripted sandbox scenario -> docs/evidence/ (operation log CSV/JSON + summary)
+npm run evidence          # scripted scenario -> docs/evidence/ (operation log CSV/JSON + summary)
 npm run test-cases        # regenerate docs/TEST-CASES.md from a test run
 ```
 

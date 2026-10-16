@@ -9,7 +9,7 @@ FinTechathon 2026 International Track, Topic A. Deadline: **20 October 2026, 23:
 | 3   | Demo video, 5 minutes or less                                           | Script: [DEMO-SCRIPT.md](DEMO-SCRIPT.md)                                                                                       | To record                                                              |
 | 4   | Source code: README, GitHub link, deployment instructions, test cases   | [README](../README.md) (local, Docker, hosting), [TEST-CASES.md](TEST-CASES.md), github.com/Ruiyang13/Plansmart                | Done; make sure the judges can open the repository                     |
 | 5   | Security self-assessment: permission tiers and known-risk list          | [SECURITY.md](SECURITY.md)                                                                                                     | Done                                                                   |
-| 6   | Execution evidence: sandbox operation logs and demo video               | [evidence/](evidence/README.md) (`npm run evidence`), plus the operation log downloaded from the app after recording the video | Logs done; video to record                                             |
+| 6   | Execution evidence: operation logs and demo video                       | [evidence/](evidence/README.md) (`npm run evidence`), plus the operation log downloaded from the app after recording the video | Logs done; video to record                                             |
 
 ## Before submitting
 

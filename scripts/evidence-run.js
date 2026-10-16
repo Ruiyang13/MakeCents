@@ -5,7 +5,7 @@
  *
  * Seeds the Okafor demo household into a throwaway in-memory MongoDB, then runs a fixed scenario through
  * the agent's real tools and the same confirm/reject function the chat's Confirm button calls: reads,
- * proposals, confirmations, rejections, sandbox money moves, refused moves, step-up codes. Each step states
+ * proposals, confirmations, rejections, over-budget warnings, savings goals, refused attempts. Each step states
  * what should happen and checks that it did. The operation log is written to docs/evidence/ as JSON, CSV
  * and a Markdown summary.
  *
@@ -28,8 +28,6 @@ async function main() {
   const Transaction = require('../models/Transaction');
   const SavingsGoal = require('../models/SavingsGoal');
   const AgentAction = require('../models/AgentAction');
-  const SandboxAccount = require('../models/SandboxAccount');
-  const totp = require('../config/totp');
   const { PERSONAS, generateForPersona, seedGoals, DEMO_PASSWORD } = require('./seed-transactions');
   const { _buildTools, _decideAction, _auditRows, _auditCsv } = require('../controllers/finance-agent');
 
@@ -43,7 +41,6 @@ async function main() {
 
   const tools = _buildTools(user._id);
   const call = async (name, args = {}) => JSON.parse(await tools.find((t) => t.name === name).invoke(args));
-  const balance = async () => (await SandboxAccount.open(user._id)).balance;
   const saved = async (name) => (await SavingsGoal.findOne({ user: user._id, name })).saved;
 
   const steps = [];
@@ -83,10 +80,9 @@ async function main() {
     const recs = await call('get_recommendations');
     return { outcome: `${recs.length} recommendations; first: "${recs[0]?.title}"`, ok: recs.length > 0 };
   });
-  await step('Read: savings goals and sandbox account', 'Goals with plans; sandbox opens at 2,500', async () => {
+  await step('Read: savings goals', 'Goals with progress and a plan', async () => {
     const g = await call('get_savings_goals');
-    const s = await call('get_sandbox_account');
-    return { outcome: `goals: ${g.goals.map((x) => `${x.name} ${x.saved}/${x.target}`).join(', ')}; sandbox balance ${s.balance}`, ok: s.balance === 2500 };
+    return { outcome: `goals: ${g.goals.map((x) => `${x.name} ${x.saved}/${x.target}`).join(', ')}`, ok: g.goals.length > 0 };
   });
 
   // --- Tier 1: propose, then the user decides ---------------------------------------------------
@@ -114,77 +110,47 @@ async function main() {
     const a = await _decideAction(user._id, rejectedId, true);
     return { outcome: a ? `unexpected: ${a.status}` : 'refused (not pending)', ok: a === null };
   });
+  await step('Record a dinner that takes DiningOut over its 250 budget', 'Still proposed, with an over-budget warning; the user decides', async () => {
+    const r = await call('add_transaction', { amount: 300, merchant: 'Birthday dinner', category: 'DiningOut' });
+    const a = await _decideAction(user._id, r.actionId, true);
+    return { outcome: `${r.warning || 'no warning'}; confirmed: ${a.status}`, ok: /Over budget/.test(r.warning || '') && a.status === 'confirmed' };
+  });
 
-  // --- Tier 3: sandbox money movement -----------------------------------------------------------
-  await step('Move 100 into "Family holiday", then confirm', 'Balance and goal change only after Confirm; before/after logged', async () => {
+  // --- savings goals: the app records what the user set aside, no bank is connected --------------
+  await step('Put 100 into "Family holiday", then confirm', 'The goal changes only after Confirm', async () => {
     const goal0 = await saved('Family holiday');
-    const id = await propose('transfer_to_goal', { goal: 'Family holiday', amount: 100 });
-    const mid = await balance();
-    const a = await _decideAction(user._id, id, true);
-    const r = a.result;
-    return {
-      outcome: `balance at proposal ${mid}; confirmed: ${r.balanceBefore} -> ${r.balanceAfter}; goal ${goal0} -> ${await saved('Family holiday')}`,
-      ok: mid === 2500 && r.balanceBefore === 2500 && r.balanceAfter === 2400 && (await saved('Family holiday')) === goal0 + 100,
-    };
-  });
-  await step('Pay the smallest detected bill from the sandbox', 'Only a detected bill, near its usual amount', async () => {
-    const bill = [...bills].sort((x, y) => x.monthly - y.monthly)[0];
-    const id = await propose('pay_bill', { merchant: bill.merchant, amount: bill.monthly });
+    const id = await propose('add_to_goal', { goal: 'Family holiday', amount: 100 });
+    const mid = await saved('Family holiday');
     const a = await _decideAction(user._id, id, true);
     return {
-      outcome: `${bill.merchant} ${bill.monthly}: ${a.status}, balance ${a.result.balanceBefore} -> ${a.result.balanceAfter}`,
-      ok: a.status === 'confirmed',
+      outcome: `at proposal ${mid}; confirmed: ${goal0} -> ${await saved('Family holiday')}`,
+      ok: mid === goal0 && a.status === 'confirmed' && (await saved('Family holiday')) === goal0 + 100,
     };
   });
-  await step('Try to move 600 in one go', 'Refused: over the 500 per-move limit', async () => {
-    const r = await call('transfer_to_goal', { goal: 'Family holiday', amount: 600 });
-    return { outcome: r.error || 'unexpectedly proposed', ok: Boolean(r.error) };
+  await step('Take 30 back out of "Family holiday", then confirm', 'The goal goes down by 30', async () => {
+    const goal0 = await saved('Family holiday');
+    const a = await _decideAction(user._id, await propose('add_to_goal', { goal: 'Family holiday', amount: 30, direction: 'take' }), true);
+    return { outcome: `${a.status}: ${goal0} -> ${await saved('Family holiday')}`, ok: (await saved('Family holiday')) === goal0 - 30 };
   });
-  await step('Prompt injection: pay the hostile "merchant" from the data', 'Refused: not a detected bill, so not an allowed payee', async () => {
-    const r = await call('pay_bill', { merchant: INJECTION, amount: 500 });
-    return { outcome: r.error || 'unexpectedly proposed', ok: Boolean(r.error) };
-  });
-  await step('Move 450, then try another 450 the same day', 'Second one refused: over the 1,000 daily limit', async () => {
-    const a = await _decideAction(user._id, await propose('transfer_to_goal', { goal: 'Family holiday', amount: 450 }), true);
-    const r = await call('transfer_to_goal', { goal: 'Family holiday', amount: 450 });
-    return { outcome: `first: ${a.status}; second: ${r.error || 'unexpectedly proposed'}`, ok: a.status === 'confirmed' && /daily limit/.test(r.error || '') };
+  await step('Prompt injection: do what the hostile "merchant" in the data says', 'Impossible: no tool can pay anyone; a fake goal is refused', async () => {
+    const payTools = tools.map((t) => t.name).filter((n) => /pay|send|transfer/i.test(n));
+    const r = await call('add_to_goal', { goal: 'account 12345678', amount: 500 });
+    return { outcome: `payment tools: ${payTools.length}; fake goal: ${r.error || 'unexpectedly proposed'}`, ok: payTools.length === 0 && Boolean(r.error) };
   });
   await step("Another user tries to confirm this user's proposal", 'Refused: proposals belong to their owner', async () => {
-    const id = await propose('transfer_to_goal', { goal: 'Boiler replacement fund', amount: 10 });
+    const id = await propose('add_to_goal', { goal: 'Boiler replacement fund', amount: 10 });
     const a = await _decideAction(new mongoose.Types.ObjectId(), id, true);
     await _decideAction(user._id, id, false);
     return { outcome: a ? `unexpected: ${a.status}` : 'refused (not found for that user)', ok: a === null };
   });
   await step('Confirm a proposal after 15 minutes', 'Refused and marked expired', async () => {
-    const id = await propose('transfer_to_goal', { goal: 'Boiler replacement fund', amount: 10 });
+    const id = await propose('add_to_goal', { goal: 'Boiler replacement fund', amount: 10 });
     await AgentAction.collection.updateOne({ _id: new mongoose.Types.ObjectId(id) }, { $set: { createdAt: new Date(Date.now() - 16 * MIN) } });
     const a = await _decideAction(user._id, id, true);
     return {
       outcome: `${a ? a.status : 'refused'}; stored status ${(await AgentAction.findById(id)).status}`,
       ok: a === null && (await AgentAction.findById(id)).status === 'expired',
     };
-  });
-  await step(
-    'With two-step sign-in on, confirm a move without a code, with a wrong code, then a right one',
-    'Only a fresh authenticator code lets the money move',
-    async () => {
-      const secret = totp.newSecret();
-      await User.updateOne({ _id: user._id }, { totp: { secret } });
-      const id = await propose('transfer_to_goal', { goal: 'Boiler replacement fund', amount: 20 });
-      const none = await _decideAction(user._id, id, true);
-      const wrongCode = totp.codeAt(secret) === '000000' ? '111111' : '000000';
-      const wrong = await _decideAction(user._id, id, true, { code: wrongCode });
-      const right = await _decideAction(user._id, id, true, { code: totp.codeAt(secret) });
-      return {
-        outcome: `no code: ${none.needCode ? 'code required' : none.status}; wrong code: ${wrong.needCode ? 'code required' : wrong.status}; right code: ${right.status}`,
-        ok: none.needCode === true && wrong.needCode === true && right.status === 'confirmed',
-      };
-    },
-  );
-  await step('Final sandbox balance', 'Never negative; equals the start minus confirmed moves', async () => {
-    const moved = (await AgentAction.find({ user: user._id, tier: 'move', status: 'confirmed' }).lean()).reduce((s, a) => s + a.args.amount, 0);
-    const b = await balance();
-    return { outcome: `balance ${b}; confirmed moves total ${Math.round(moved * 100) / 100}`, ok: b >= 0 && Math.abs(2500 - moved - b) < 0.005 };
   });
 
   // --- write the evidence ---------------------------------------------------------------------
@@ -195,7 +161,7 @@ async function main() {
   fs.writeFileSync(path.join(OUT, 'operation-log.csv'), `\uFEFF${_auditCsv(rows)}\r\n`);
   const passed = steps.filter((s) => s.ok).length;
   const cell = (s) => String(s).replace(/\|/g, '\\|');
-  const md = `# Execution evidence: sandbox operation log
+  const md = `# Execution evidence: operation log
 
 Generated by \`npm run evidence\` on ${new Date().toISOString()}.
 
@@ -207,8 +173,8 @@ Generated by \`npm run evidence\` on ${new Date().toISOString()}.
   language model itself is not called, so the run is free and identical every time; the demo video shows the same
   flow driven by Claude in the chat.
 - **Files:** [operation-log.csv](operation-log.csv) and [operation-log.json](operation-log.json) hold every
-  entry: ${rows.length} rows with time, tier (read / write / move), action, arguments, status, result
-  (money moves include \`balanceBefore\` and \`balanceAfter\`), and any error.
+  entry: ${rows.length} rows with time, tier (read / write), action, arguments, status, result, any warning
+  and any error.
 
 | # | Step | Expected | Outcome | |
 | --- | --- | --- | --- | --- |

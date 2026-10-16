@@ -79,8 +79,8 @@
       });
       return args.currency ? `${what} · ${t("converted at today's rate")}` : what;
     }
-    if (tool === 'transfer_to_goal') return t('Move {amount} from the sandbox account to {goal}', { amount: args.amount, goal: args.goal });
-    if (tool === 'pay_bill') return t('Pay {merchant} {amount} from the sandbox account', { merchant: args.merchant, amount: args.amount });
+    if (tool === 'add_to_goal')
+      return t(args.direction === 'take' ? 'Take {amount} out of {goal}' : 'Put {amount} into {goal}', { amount: args.amount, goal: args.goal });
     return `${tool} ${JSON.stringify(args)}`;
   }
 
@@ -88,13 +88,21 @@
   function approvalCard(a) {
     clearWelcome();
     const card = document.createElement('div');
-    card.className = a.tier === 'move' ? 'approval money' : 'approval';
+    card.className = 'approval';
     const text = document.createElement('div');
     text.innerHTML = `<span class="tag">${t('Needs your approval')}</span>`;
     const what = document.createElement('span');
     what.className = 'what';
     what.textContent = describe(a);
     text.appendChild(what);
+    if (a.warning) {
+      // e.g. over budget: shown, but the choice stays the user's
+      const warn = document.createElement('span');
+      warn.className = 'warn';
+      const o = a.warning.overBudget;
+      warn.textContent = t('Over budget: this takes {cat} to {spent} this month (budget {limit})', { cat: t(o.category), spent: o.spent, limit: o.limit });
+      text.appendChild(warn);
+    }
     const btns = document.createElement('div');
     btns.className = 'd-flex gap-2';
     for (const [verb, label, cls] of [
@@ -113,28 +121,7 @@
     scrollDown();
   }
 
-  // Moving money with two-step sign-in on: the server asks for a fresh authenticator code before it runs.
-  function askCode(a, card, text, message) {
-    const row = card.lastElementChild;
-    const code = Object.assign(document.createElement('input'), {
-      className: 'form-control form-control-sm num code-input',
-      inputMode: 'numeric',
-      maxLength: 7,
-      placeholder: t('6-digit code'),
-      autocomplete: 'one-time-code',
-    });
-    code.setAttribute('aria-label', message);
-    const ok = Object.assign(document.createElement('button'), { type: 'button', className: 'btn btn-sm btn-danger', textContent: t('Confirm') });
-    ok.onclick = () => code.value.trim() && decide(a, 'confirm', card, text, code.value.trim());
-    code.onkeydown = (e) => e.key === 'Enter' && ok.click();
-    const no = Object.assign(document.createElement('button'), { type: 'button', className: 'btn btn-sm btn-ghost', textContent: t('Reject') });
-    no.onclick = () => decide(a, 'reject', card, text);
-    row.replaceChildren(code, ok, no);
-    text.querySelector('.tag').textContent = message;
-    code.focus();
-  }
-
-  async function decide(a, verb, card, text, code) {
+  async function decide(a, verb, card, text) {
     card.querySelectorAll('button').forEach((b) => {
       b.disabled = true;
     });
@@ -143,10 +130,8 @@
       const r = await fetch(`/finance/actions/${encodeURIComponent(a.id)}/${verb}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf() },
-        body: JSON.stringify(code ? { code } : {}),
       });
       const d = await r.json();
-      if (d.needCode) return askCode(a, card, text, d.error);
       if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
       tag = { confirmed: t('Applied'), rejected: t('Rejected'), error: t('Failed: {error}', { error: d.action.error }) }[d.action.status];
       card.classList.add(d.action.status === 'error' ? 'failed' : 'done');

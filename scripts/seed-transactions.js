@@ -27,7 +27,6 @@ for (const f of ['.env', '.env.example']) {
 const User = require('../models/User');
 const SavingsGoal = require('../models/SavingsGoal');
 const Transaction = require('../models/Transaction');
-const SandboxAccount = require('../models/SandboxAccount');
 const AgentAction = require('../models/AgentAction');
 const Budget = require('../models/Budget');
 const FixedCost = require('../models/FixedCost');
@@ -340,9 +339,7 @@ async function main() {
       continue;
     }
     await Transaction.deleteMany({ user: user._id });
-    // A clean slate for demos: sandbox back to its starting balance, empty operation log (so no daily limit carries over),
-    // no budgets or fixed-cost corrections left over from earlier runs.
-    await SandboxAccount.deleteMany({ user: user._id });
+    // A clean slate for demos: empty operation log, no budgets or fixed-cost corrections left over from earlier runs.
     await AgentAction.deleteMany({ user: user._id });
     await Budget.deleteMany({ user: user._id });
     await FixedCost.deleteMany({ user: user._id });

@@ -7,8 +7,8 @@ FinTechathon 2026 · International Track · Topic A (Personal Finance Assistant)
 MakeCents (Chinese name 厘明) is a personal finance assistant built around an AI agent (Claude) that works on the user's own
 transaction data. It answers questions in plain English or Chinese, finds recurring bills and savings
 opportunities, plans savings goals, reads receipts and payment screenshots, and proposes changes
-(budgets, new records, and money movements inside a simulated sandbox account) that the user approves before
-anything happens.
+(budgets, new records, money put into savings goals) that the user approves before anything happens. No bank
+account is connected: the app records what the user tells it and never touches real money.
 
 This document covers the **system architecture**, the **core algorithms** and the **security design**.
 
@@ -81,13 +81,12 @@ test/             automated tests
 | Collection                                | Key fields                                                                                                               | Notes                                                                                                                                         |
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `users`                                   | `email` (unique, normalised), `password` (bcrypt), `name`, `currency`, `totp`                                            | `currency` is chosen at sign-up from an allow-list of 18 ISO 4217 codes; `totp` holds the two-step sign-in secret and the last used time step |
-| `transactions`                            | `user`, `date`, `amount` (negative = money out, home currency), `currency`, `original`, `merchant`, `category`, `source` | `source`: imported, `manual`, `scan` or `sandbox`. Only `manual` and `scan` rows can be edited or deleted by the user                         |
+| `transactions`                            | `user`, `date`, `amount` (negative = money out, home currency), `currency`, `original`, `merchant`, `category`, `source` | `source`: imported, `manual` or `scan`. Only `manual` and `scan` rows can be edited or deleted by the user                                    |
 | `budgets`                                 | `user`, `category`, `monthlyLimit`                                                                                       | One per category; repeats every month                                                                                                         |
 | `savinggoals`                             | `user`, `name`, `target`, `deadline`, `contributions[]`                                                                  | `saved` is derived (sum of contributions), never stored                                                                                       |
 | `fixedcosts`                              | `user`, `merchant`, `key`, `fixed`, `monthly`, `category`, `day`                                                         | The user's corrections to fixed-cost detection, one per merchant (`{ user, key }` unique): a fixed amount, or "never fixed" (section 4.2)     |
 | `chatthreads`                             | `user`, `threadId`, `title`                                                                                              | Index of conversations; messages live in the checkpoint collections                                                                           |
-| `agentactions`                            | `user`, `tool`, `tier`, `args`, `status`, `result`, `error`, `decidedAt`                                                 | Operation log **and** queue of proposals awaiting confirmation                                                                                |
-| `sandboxaccounts`                         | `user` (unique), `balance`                                                                                               | Simulated current account for money movement; opened with 2,500; only confirmed move-tier actions change it                                   |
+| `agentactions`                            | `user`, `tool`, `tier`, `args`, `status`, `result`, `error`, `warning`, `decidedAt`                                      | Operation log **and** queue of proposals awaiting confirmation                                                                                |
 | `finance_agent_checkpoints` (+ `_writes`) | LangGraph state per `thread_id`                                                                                          | Conversation memory                                                                                                                           |
 | `sessions`                                | server-side session data                                                                                                 | Managed by `connect-mongo`                                                                                                                    |
 
@@ -127,11 +126,9 @@ the arguments and stores an `AgentAction` with status `pending`, but **does not 
 browser receives a `pending` event and shows an action card with **Confirm** and **Reject**. Only
 `POST /finance/actions/:id/confirm` applies the change, after the checks in section 3.2.
 
-**A money movement (move tier).** The same proposal flow, with extra controls: the destination must
-be one of the user's own goals or detected bills, the amount must fit the per-move and daily limits and
-the sandbox balance, and if two-step sign-in is on the confirm request must carry a fresh authenticator
-code. The balance is debited in one atomic database update, and the operation log stores the balance
-before and after.
+**Spending past a budget.** When a proposed expense would take a category over its monthly budget, the
+proposal still goes ahead, but it carries a warning (category, spent this month after it, the budget). The card
+shows it in red and the agent mentions it; the user decides. Budgets guide, they never block.
 
 **Receipt or payment screenshot.** The browser downsizes the image (max 1600 px, JPEG) and posts
 it. The server sends it to Claude with a strict output schema, cleans the result, logs a read-tier
@@ -157,15 +154,13 @@ user-id parameter to fill in.
 | `get_recurring_bills`      | read                 | Detected bills, due dates, price rises, overlaps (section 4.1)                          |
 | `get_recommendations`      | read                 | Ranked recommendations with evidence and yearly savings (section 4.3)                   |
 | `get_savings_goals`        | read                 | Goals with automatic plans (section 4.4)                                                |
-| `get_sandbox_account`      | read                 | Sandbox balance, limits, amount moved in the last 24 hours, recent moves                |
 | `add_transaction`          | write (propose only) | Record spending or income the user mentions                                             |
 | `set_budget`               | write (propose only) | Create or change a monthly budget                                                       |
 | `delete_budget`            | write (propose only) | Remove a budget                                                                         |
-| `transfer_to_goal`         | move (propose only)  | Move money from the sandbox account into one of the user's savings goals                |
-| `pay_bill`                 | move (propose only)  | Pay one of the user's detected recurring bills from the sandbox account                 |
+| `add_to_goal`              | write (propose only) | Record money the user put into, or took out of, one of their savings goals              |
 
-Money moves only inside the **simulated sandbox account**, and only to the user's own goals or detected bills.
-There is no tool for real money, paying anyone else, or changing existing transactions.
+No bank account is connected, so there is no money limit to enforce: the agent only records what the user tells
+it. There is no tool for real money, paying anyone, or changing existing transactions.
 
 ### 2.2 Prompt design
 
@@ -198,41 +193,38 @@ There is no tool for real money, paying anyone else, or changing existing transa
 
 ### 3.1 Threat model
 
-| Threat                                                     | Main defence                                                                                                       |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| The AI takes an action the user didn't want                | Permission tiers; every change needs a human Confirm (3.2)                                                         |
-| The AI moves money it shouldn't                            | Sandbox only; own goals and detected bills only; limits; atomic balance check; authenticator code at confirm (3.2) |
-| Prompt injection via merchant names, notes or receipt text | Data/instruction boundary in prompts, and no tool can act without confirmation (3.3)                               |
-| One user reading or changing another's data                | User id bound inside every tool and query; ownership re-checked on confirm (3.4)                                   |
-| Cross-site request forgery                                 | CSRF token on every state-changing request (3.5)                                                                   |
-| Account takeover                                           | bcrypt hashing, generic login errors, rate limits, session-fixation defence, optional two-step sign-in (3.5)       |
-| Cross-site scripting through AI output                     | Markdown sanitised with DOMPurify; Pug escapes by default; nonce-based Content-Security-Policy (3.5)               |
-| Abuse and cost blow-up                                     | Per-route rate limits; message and image size limits (3.5)                                                         |
-| Leaked secrets                                             | `.env` git-ignored; production refuses the placeholder session secret (3.6)                                        |
+| Threat                                                     | Main defence                                                                                                 |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| The AI takes an action the user didn't want                | Permission tiers; every change needs a human Confirm (3.2)                                                   |
+| The AI pays or sends money                                 | Impossible: no bank is connected and no tool can pay anyone (3.2)                                            |
+| Prompt injection via merchant names, notes or receipt text | Data/instruction boundary in prompts, and no tool can act without confirmation (3.3)                         |
+| One user reading or changing another's data                | User id bound inside every tool and query; ownership re-checked on confirm (3.4)                             |
+| Cross-site request forgery                                 | CSRF token on every state-changing request (3.5)                                                             |
+| Account takeover                                           | bcrypt hashing, generic login errors, rate limits, session-fixation defence, optional two-step sign-in (3.5) |
+| Cross-site scripting through AI output                     | Markdown sanitised with DOMPurify; Pug escapes by default; nonce-based Content-Security-Policy (3.5)         |
+| Abuse and cost blow-up                                     | Per-route rate limits; message and image size limits (3.5)                                                   |
+| Leaked secrets                                             | `.env` git-ignored; production refuses the placeholder session secret (3.6)                                  |
 
 ### 3.2 Permission tiers
 
 ```mermaid
 flowchart TB
     R["Read tier<br/>analyse, look up, plan"] -->|runs automatically| L1[(audit: executed / error)]
-    W["Write tier<br/>record spending, set or delete budget"] -->|validate, then queue| P[pending proposal]
+    W["Write tier<br/>record spending, savings, set or delete budget"] -->|validate, then queue| P[pending proposal]
+    W -.->|over a budget?| WN[warning on the card, never a block]
     P -->|user presses Confirm| V{re-validate:<br/>owner · not expired · schema · rules}
     V -->|ok| E[apply change] --> L2[(audit: confirmed + result)]
     V -->|fails| X[(audit: error / expired)]
     P -->|user presses Reject| RJ[(audit: rejected)]
-    M["Move tier (sandbox)<br/>into own goals, pay detected bills"] -->|validate + limits, then queue| P
-    P -->|Confirm on a money move,<br/>two-step sign-in on| C{fresh authenticator code?}
-    C -->|yes| V
-    C -->|no: nothing changes| P
-    V -->|ok, money move| D[atomic debit of sandbox balance] --> L3[(audit: confirmed + balance before / after)]
-    O["Real money, other people,<br/>editing transactions"] -.->|no tool exists| N[impossible by construction]
+    O["Real money, paying anyone,<br/>editing transactions"] -.->|no tool exists| N[impossible by construction]
 ```
 
 The confirmation protocol (`decideAction` in `controllers/finance-agent.js`):
 
 1. **Validation before queueing.** Arguments must pass the tool's Zod schema (e.g. amount > 0 and
    ≤ 1,000,000; merchant ≤ 80 characters) and business rules (category must exist for this user;
-   date not in the future and not over a year ago; the budget must exist before it can be deleted).
+   date not in the future and not over a year ago; the budget must exist before it can be deleted; the savings
+   goal must exist, and can't have more taken out than it holds).
 2. **Expiry and cap.** Proposals expire after **15 minutes**. A user can have at most **5** waiting;
    beyond that the agent is told to ask the user to decide first.
 3. **One decision only.** Confirm/Reject is a single atomic `findOneAndUpdate` from `pending` to
@@ -243,17 +235,8 @@ The confirmation protocol (`decideAction` in `controllers/finance-agent.js`):
 5. **Operation log.** Every read, every proposal and every refused attempt (with the rule it broke) is stored
    with arguments, status, result or error and timestamps. `/finance/audit` shows it as a page, and
    `/finance/audit/export?format=csv|json` downloads it (CSV cells are quoted and formula-safe).
-6. **Money movement (move tier) adds:**
-   - destinations limited to the user's own savings goals (no more than the goal still needs) and their
-     active detected bills (no more than 20% above the usual amount);
-   - limits of **500 per move** and **1,000 per rolling 24 hours** (confirmed moves);
-   - a check against the sandbox balance at proposal time, then an **atomic debit** at confirm time
-     (`balance >= amount` in the same update), so it can never go negative, even with two proposals
-     confirmed one after the other;
-   - if the booking step fails after the debit, the money is put back;
-   - **step-up authentication:** with two-step sign-in on, Confirm must include a current
-     authenticator code (each code works once); a missing or wrong code leaves the proposal untouched;
-   - the result in the operation log records `from`, `to`, `amount`, `balanceBefore` and `balanceAfter`.
+6. **Warnings, not blocks.** An expense that would take a category over its budget is still proposed, with a
+   `warning` stored on the action (and shown in the operation log). There are no money limits: nothing real moves.
 
 Changes the user makes on the app's own forms (Record, Budgets, Goals, Account) are direct user actions, not
 agent actions; they are validated server-side the same way. Scanned receipt rows are logged as
@@ -270,8 +253,7 @@ images. Defences are layered so that a successful injection still can't do damag
 - Read tools can't change anything.
 - Write tools can only _propose_; a person must press Confirm on a card that shows exactly what will
   change.
-- No tool can move real money, pay anyone other than the user's own goals and detected bills, exceed the
-  limits, or reach another user; a money move also needs an authenticator code when two-step sign-in is on.
+- No tool can move real money, pay anyone, or reach another user.
 - Model-supplied strings used in queries are made safe: the merchant filter escapes regex characters
   (preventing invalid or catastrophic patterns), and row limits are capped.
 - Receipt output must match a typed schema. It is then normalised: categories outside the
@@ -287,7 +269,7 @@ images. Defences are layered so that a successful injection still can't do damag
   invalid ids are rejected before querying. Editing, like deleting, is limited to the user's own `manual` and `scan` entries.
 - **Fixed-cost corrections:** stored and looked up by `{ user, key }`, so one user's corrections never touch another's bills.
 - **Chat threads:** a thread id from the browser is used only if it belongs to the user.
-- **Account deletion:** removes the user, transactions, budgets, goals, fixed-cost corrections, the sandbox account,
+- **Account deletion:** removes the user, transactions, budgets, goals, fixed-cost corrections,
   chat threads, agent checkpoints and the audit log.
 
 ### 3.5 Web application security
@@ -369,8 +351,8 @@ transaction is **fixed** if its category is a fixed-cost category (rent, mortgag
 phone, childcare, subscriptions) **or** its merchant is a detected recurring bill. This catches a
 variable electricity bill filed under another category. The spending calendar, the Insights
 pace chart and category split, the recommendations and the goal planner all use everyday
-spending only, and show fixed costs separately. Transfers into savings (category `Savings`, including
-sandbox transfers into goals) move money rather than spend it, so they are left out of spending entirely.
+spending only, and show fixed costs separately. Transfers into savings (category `Savings`) move money
+rather than spend it, so they are left out of spending entirely.
 
 **User corrections** (the Fixed costs card on Insights, stored in `fixedcosts`, one per merchant). Detection is a
 guess, so the user can override it, and every view above follows because they all go through `detectBills`:
@@ -532,15 +514,15 @@ Changing the home currency on the Account page relabels amounts; it does not con
 ## 6. Testing
 
 ```bash
-npm test     # 78 tests, in-memory MongoDB, Claude stubbed: no API key needed
+npm test     # 80 tests, in-memory MongoDB, Claude stubbed: no API key needed
 npm run lint # eslint + prettier
 npm run check-tools  # runs every agent tool against seeded demo data
-npm run evidence     # 16-step sandbox scenario, writes docs/evidence/ (operation log + summary)
+npm run evidence     # 13-step scripted scenario, writes docs/evidence/ (operation log + summary)
 ```
 
 | Suite                         | What it proves                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `finance-agent.test.js`       | Read tools run and are logged; write tools only propose; confirm applies, reject never runs; no double decisions; another user can't confirm; expired proposals can't run; pending cap; invalid categories, limits and dates rejected; regex characters in merchant search treated literally; budget status; calendar scaling; **sandbox money movement**: proposal only, balance before/after logged, unknown goals and over-limit amounts refused, daily limit, no overdraft, bills only, authenticator code required when two-step sign-in is on; **prompt injection**: instructions hidden in transaction data can't pay, transfer or change budgets, every attempt is logged as refused, and no tool takes a user parameter; CSV export is formula-safe                                                                    |
+| `finance-agent.test.js`       | Read tools run and are logged; write tools only propose; confirm applies, reject never runs; no double decisions; another user can't confirm; expired proposals can't run; pending cap; invalid categories, limits and dates rejected; regex characters in merchant search treated literally; budget status; calendar scaling; **savings goals**: proposal only, in and out, unknown goals and taking out more than saved refused; **over budget**: still proposed, with a warning; **prompt injection**: no tool can pay anyone, instructions hidden in transaction data can't change budgets or goals, every attempt is logged as refused, and no tool takes a user parameter; CSV export is formula-safe                                                                                                                     |
 | `auth.test.js`                | Sign-up (including currency and the AI processing notice), sign-in, generic login errors, return-to after login, 401 for signed-out API calls, CSRF rejection, CSP nonce on every inline script and no inline handlers, two-step sign-in (setup, code required, replay refused, turning off needs password and code, RFC 6238 vectors), account deletion removes data; Record (including editing entries: same validation, own manual/scan entries only), Budgets, Goals (add and take-out animation state) and Insights pages including ownership checks; fixed-cost corrections (add, correct, not fixed, undo, per user); account deletion also removes fixed-cost corrections; operation log page and CSV/JSON downloads; receipt scan: cleaning, non-image rejection, all-or-nothing save; Chinese rendering; chat threads |
 | `bills.test.js`               | Bill detection (and that habits and income are not bills), due dates, higher-than-usual and inactive flags, overlaps, income share, history, percentages add to 100, fixed vs everyday, user corrections (amount, not fixed, added by hand, unrecorded total)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `recommendations.test.js`     | Warnings first, budget pace with the daily figure, creep (naming the merchant) and its saving, delivery, overlaps, fee-specific advice, ranking and the cap of 6                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
@@ -548,9 +530,9 @@ npm run evidence     # 16-step sandbox scenario, writes docs/evidence/ (operatio
 | `i18n.test.js`, `css.test.js` | Every string translated with matching placeholders; every page has its styles                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 
 **Execution evidence.** `npm run evidence` seeds a demo household into a throwaway in-memory database and
-runs 16 steps through the agent's real tools and confirm function: reads, a confirmed and a rejected proposal,
-sandbox transfers and a bill payment, and refused attempts (over the per-move limit, over the daily limit, a
-prompt-injection payee, another user's confirm, an expired proposal, a move without the authenticator code). It
+runs 13 steps through the agent's real tools and confirm function: reads, a confirmed and a rejected proposal,
+an over-budget expense (proposed with a warning), money put into and taken out of a goal, and refused attempts
+(a prompt-injection "payee", another user's confirm, an expired proposal). It
 checks each outcome and writes the operation log to `docs/evidence/` as CSV, JSON and a Markdown summary.
 
 **Demo data.** `npm run seed` creates three households with 6 months of realistic transactions, each
@@ -577,10 +559,9 @@ dependencies only and runs as a non-root user). Setup and hosting steps are in t
 
 ## 8. Limitations and next steps
 
-- **Sandbox, not a bank.** Money movement runs against a simulated account. Connecting a real bank
-  (e.g. open-banking APIs) would keep the same tier, limits and step-up code, plus the provider's own consent flow.
+- **No bank connection.** MakeCents records what the user tells it (typed, spoken or scanned). Importing from a
+  bank (e.g. open-banking APIs, read-only) would remove manual entry; it would still never pay anyone.
 - **Monthly bills only.** Weekly and annual bills need a frequency detector and longer history.
-- **No currency conversion.** A user has one currency; amounts are never converted.
 - **Linear projections.** Budget projections are linear and don't account for bills that land on fixed
   dates.
 

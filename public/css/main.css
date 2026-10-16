@@ -879,12 +879,12 @@ h1,
   font-weight: 800;
   display: block;
 }
-/* money-movement proposals (sandbox) stand out from budget proposals; the code box sits beside the buttons */
-.approval.money {
-  border-color: var(--crimson);
-}
-.approval .code-input {
-  width: 7.5rem;
+/* e.g. "over budget": a heads-up on the proposal, never a block */
+.approval .warn {
+  display: block;
+  color: var(--crimson);
+  font-size: 0.85rem;
+  font-weight: 600;
 }
 .approval.done {
   border-color: color-mix(in srgb, var(--sage) 60%, var(--line));

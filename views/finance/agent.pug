@@ -142,21 +142,14 @@ block content
                 span.glyph(style='background: var(--ochre)')
                   i.fas.fa-hand
                 span
-                  b= t('Record spending & set budgets')
-                  = t('Only proposed. Nothing changes until you confirm.')
-              li
-                span.glyph(style='background: var(--crimson)')
-                  i.fas.fa-money-bill-transfer
-                span
-                  b= t('Move money (sandbox only)')
-                  = t('Only from the simulated sandbox account, to your own goals or bills. Max {per} a move, {day} a day. Always needs your confirmation, plus a code if two-step sign-in is on.', { per: sandbox.perMove, day: sandbox.perDay })
-                  span.d-block.mt-1.num= t('Sandbox balance: {amount}', { amount: sandbox.balance })
+                  b= t('Record spending, savings & budgets')
+                  = t('Only proposed. Nothing changes until you confirm. Going over a budget shows a warning, never a block.')
               li
                 span.glyph(style='background: var(--ink-2)')
                   i.fas.fa-ban
                 span
-                  b= t('Real money, other people, editing history')
-                  = t('Impossible. The assistant has no such tool.')
+                  b= t('Moving real money, paying anyone, editing history')
+                  = t('Impossible. No bank is connected and the assistant has no such tool.')
             a.small.fw-bold.d-inline-block.mt-3(href='/finance/audit')
               = t('View operation log')
               i.fas.fa-arrow-right.ms-2

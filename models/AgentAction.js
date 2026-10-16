@@ -8,11 +8,12 @@ const agentActionSchema = new mongoose.Schema(
   {
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     tool: { type: String, required: true },
-    tier: { type: String, enum: ['read', 'write', 'move', 'user'], required: true }, // move = sandbox money; user = the user's own form action
+    tier: { type: String, enum: ['read', 'write', 'user'], required: true }, // user = the user's own form action
     args: { type: mongoose.Schema.Types.Mixed, default: {} },
     status: { type: String, enum: ['executed', 'pending', 'confirmed', 'rejected', 'expired', 'error', 'refused'], required: true },
     result: mongoose.Schema.Types.Mixed,
     error: String,
+    warning: mongoose.Schema.Types.Mixed, // { overBudget: { category, spent, limit } }: shown on the proposal, never blocking
     decidedAt: Date,
   },
   { timestamps: true },
