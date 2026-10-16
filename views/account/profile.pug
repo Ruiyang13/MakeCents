@@ -19,11 +19,14 @@ block content
             label.form-label(for='name')= t('Name')
             input#name.form-control(type='text', name='name', value=user.name, maxlength='80')
           .mb-3
-            label.form-label(for='currency')= t('Currency')
+            label.form-label(for='currency')= t('Home currency')
             select#currency.form-select(name='currency')
               each c in currencies
                 option(value=c.code, selected=c.code === currency)= c.label
-            .form-text= t('Changing it relabels your amounts; it does not convert them.')
+            .form-text
+              = t('Budgets, goals and insights use this currency. Spending abroad? Pick the currency on the Record keypad or tell the assistant; it is converted at today\'s rate.')
+              |
+              | #{ t('Changing it relabels your amounts; it does not convert them.') }
           button.btn.btn-ghost(type='submit')= t('Save')
 
     .plane.faceted.slate.mb-4

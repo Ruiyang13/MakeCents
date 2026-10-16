@@ -9,6 +9,12 @@
           h2#scan-title.h5.mb-0= t('Is this correct?')
           span.small.muted= t("Check the amounts, fix anything the AI got wrong, untick rows you don't want.")
         button.btn-close.ms-auto(type='button', data-bs-dismiss='modal', aria-label=t('Close'))
+      //- the currency the image is in; anything but the home currency is converted on save
+      label.scan-currency.mt-3
+        span.small.muted= t('Currency on the receipt')
+        select#scan-currency.form-select.form-select-sm
+          each code in currencies
+            option(value=code)= code
       #scan-warn.alert.alert-warning.small.mt-3.mb-0(hidden)
       .modal-body.px-0
         img#scan-preview.scan-preview(alt=t('Your uploaded image'))

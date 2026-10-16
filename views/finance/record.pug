@@ -81,7 +81,11 @@ block content
                         span.hist-tag.due= t('next {date}', { date: new Date(tx.nextDue).toLocaleDateString(dateLocale, { day: 'numeric', month: 'short' }) })
                       each f in tx.flags
                         span.hist-tag.warn= f.text
-                  span.hist-amt.num(class=tx.amount > 0 ? 'in' : '') #{ tx.amount > 0 ? '+' : '−' }#{ money(Math.abs(tx.amount)) }
+                  span.hist-amt.num(class=tx.amount > 0 ? 'in' : '')
+                    | #{ tx.amount > 0 ? '+' : '−' }#{ money(Math.abs(tx.amount)) }
+                    //- paid in another currency: what was actually paid
+                    if tx.original
+                      small.hist-orig= moneyIn(Math.abs(tx.original.amount), tx.original.currency)
                   if tx.deletable
                     - const d = new Date(tx.date);
                     - const meta = categories.find((c) => c.key === tx.category);
@@ -90,7 +94,8 @@ block content
                         type='button',
                         data-id=tx.id,
                         data-category=tx.category,
-                        data-amount=String(Math.abs(tx.amount)),
+                        data-amount=String(Math.abs(tx.original ? tx.original.amount : tx.amount)),
+                        data-currency=tx.original ? tx.original.currency : currency,
                         data-note=meta && tx.merchant === meta.label ? '' : tx.merchant,
                         data-date=`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
                         aria-label=t('Edit {merchant}', { merchant: tx.merchant }),
@@ -121,8 +126,14 @@ block scripts
               span#rec-sub.small.muted
             button.btn-close.ms-auto(type='button', data-bs-dismiss='modal', aria-label=t('Close'))
           .rec-display(aria-live='polite')
-            span.cur= currencySymbol
+            //- paid in another currency (e.g. abroad)? pick it; it's converted to the home currency on save
+            select#rec-currency.rec-cur(name='currency', aria-label=t('Currency paid'), data-home=currency)
+              each code in currencies
+                option(value=code, selected=code === currency)= code
             span#rec-display.num 0
+          p#rec-fx.rec-fx(hidden)
+            = t("Converted to {home} at today's rate when saved.", { home: currency })
+            a.ms-1(href='https://www.exchangerate-api.com', target='_blank', rel='noopener')= t('Rates by ExchangeRate-API')
           .rec-keypad
             each k in ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'back']
               button.rec-key(type='button', data-k=k, aria-label=k === 'back' ? t('Delete digit') : k)

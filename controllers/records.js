@@ -6,6 +6,7 @@ const Transaction = require('../models/Transaction');
 const AgentAction = require('../models/AgentAction');
 const Budget = require('../models/Budget');
 const User = require('../models/User');
+const fx = require('../config/fx');
 const { QUICK_CATEGORIES, CATEGORY_STYLE } = require('../config/categories');
 const { detectBills, spendingHistory, LOOKBACK_DAYS } = require('./bills');
 
@@ -25,13 +26,16 @@ const DELETABLE_SOURCES = ['manual', 'scan'];
 const fmtFor = (currency) => new Intl.NumberFormat('en-GB', { style: 'currency', currency });
 const accountCurrency = (userId) => User.currencyOf(userId);
 
+const MAX_HOME = 1_000_000; // largest entry, in the home currency
+
 // Same rules for keypad entries and scanned rows. Returns { problem } or a clean entry.
+// The amount may be in another currency (up to 10 digits, for yen or won); inHome() converts it and checks the size.
 function validateEntry({ category, amount, note, date }) {
   const meta = BY_KEY[category];
   const value = Number(amount);
   const when = date ? new Date(`${date}T12:00:00`) : new Date();
   if (!meta) return { problem: 'Pick a category.' };
-  if (!/^\d{1,7}(\.\d{1,2})?$/.test(String(amount ?? '')) || !(value > 0 && value <= 1_000_000)) {
+  if (!/^\d{1,10}(\.\d{1,2})?$/.test(String(amount ?? '')) || !(value > 0)) {
     return { problem: 'Enter an amount greater than 0, with at most two decimals.' };
   }
   if (Number.isNaN(when.getTime()) || when > new Date(Date.now() + DAY_MS) || when < new Date(Date.now() - 366 * DAY_MS)) {
@@ -45,11 +49,35 @@ function validateEntry({ category, amount, note, date }) {
   return { meta, value, when: when > new Date() ? new Date() : when, merchant };
 }
 
+// Money paid in another currency is converted to the home currency at today's rate; what was actually paid is kept.
+async function inHome(entry, currency, home) {
+  if (entry.problem) return entry;
+  if (currency && currency !== home) {
+    if (!User.CURRENCIES.includes(currency)) return { problem: 'Pick a currency.' };
+    try {
+      entry = { ...entry, ...(await fx.toHome(entry.value, currency, home)) };
+    } catch (error) {
+      console.error('Exchange rate failed:', error.message);
+      return { problem: "Couldn't get today's exchange rate. Try again, or enter the amount in your home currency." };
+    }
+  }
+  if (entry.value > MAX_HOME) return { problem: 'That amount is too large.' };
+  return entry;
+}
+
+// Signed like the stored amount: negative for money out.
+const signed = (e, n) => (e.meta.income ? n : -n);
+const originalOf = (e) => e.original && { ...e.original, amount: signed(e, e.original.amount) };
+// "¥5,000 (£26.40)" for a converted entry, "£26.40" otherwise
+const shown = (e, home) =>
+  e.original ? `${fmtFor(e.original.currency).format(e.original.amount)} (${fmtFor(home).format(e.value)})` : fmtFor(home).format(e.value);
+
 const toDoc = (userId, currency, e, source) => ({
   user: userId,
   date: e.when,
-  amount: e.meta.income ? e.value : -e.value,
+  amount: signed(e, e.value),
   currency,
+  original: originalOf(e),
   merchant: e.merchant,
   category: e.meta.key,
   description: source === 'scan' ? 'Scanned from an image' : 'Recorded manually',
@@ -106,7 +134,9 @@ exports.getRecord = async (req, res, next) => {
         : null,
       money: (n) => fmt.format(n),
       money0: (n) => fmt0.format(n),
+      moneyIn: (n, cur) => fmtFor(cur).format(n), // what was paid abroad, in its own currency
       currency,
+      currencies: User.CURRENCIES,
       currencySymbol: fmt.formatToParts(0).find((p) => p.type === 'currency')?.value || '',
       today: now.toISOString().slice(0, 10),
       historyDays,
@@ -118,20 +148,23 @@ exports.getRecord = async (req, res, next) => {
 };
 
 exports.postRecord = async (req, res, next) => {
-  const entry = validateEntry(req.body);
-  if (entry.problem) {
-    req.flash('errors', { msg: entry.problem });
-    return res.redirect('/finance/record');
-  }
   try {
     const currency = await accountCurrency(req.user._id);
+    const entry = await inHome(validateEntry(req.body), req.body.currency, currency);
+    if (entry.problem) {
+      req.flash('errors', { msg: entry.problem });
+      return res.redirect('/finance/record');
+    }
     const tx = await Transaction.create(toDoc(req.user._id, currency, entry, 'manual'));
-    const { meta, value, merchant } = entry;
-    await AgentAction.logUser(req.user._id, 'record_entry', { category: meta.key, amount: tx.amount, merchant, date: tx.date }, { id: tx._id });
+    const { meta, merchant } = entry;
+    await AgentAction.logUser(
+      req.user._id,
+      'record_entry',
+      { category: meta.key, amount: tx.amount, original: tx.original?.currency ? tx.original : undefined, merchant, date: tx.date },
+      { id: tx._id },
+    );
     req.flash('success', {
-      msg:
-        req.t('Recorded {amount} · {cat}', { amount: fmtFor(currency).format(value), cat: req.cat(meta.key) }) +
-        (merchant !== meta.label ? ` · ${merchant}` : ''),
+      msg: req.t('Recorded {amount} · {cat}', { amount: shown(entry, currency), cat: req.cat(meta.key) }) + (merchant !== meta.label ? ` · ${merchant}` : ''),
     });
     res.redirect('/finance/record');
   } catch (error) {
@@ -141,12 +174,13 @@ exports.postRecord = async (req, res, next) => {
 
 // Edit an entry with the same keypad sheet and the same rules as a new one. Like delete, only the user's own entries.
 exports.postUpdateRecord = async (req, res, next) => {
-  const entry = validateEntry(req.body);
-  if (entry.problem) {
-    req.flash('errors', { msg: entry.problem });
-    return res.redirect('/finance/record#history');
-  }
   try {
+    const currency = await accountCurrency(req.user._id);
+    const entry = await inHome(validateEntry(req.body), req.body.currency, currency);
+    if (entry.problem) {
+      req.flash('errors', { msg: entry.problem });
+      return res.redirect('/finance/record#history');
+    }
     const tx =
       mongoose.isValidObjectId(req.params.id) && (await Transaction.findOne({ _id: req.params.id, user: req.user._id, source: { $in: DELETABLE_SOURCES } }));
     if (!tx) {
@@ -154,7 +188,8 @@ exports.postUpdateRecord = async (req, res, next) => {
       return res.redirect('/finance/record#history');
     }
     const before = { category: tx.category, amount: tx.amount, merchant: tx.merchant, date: tx.date };
-    tx.set({ date: entry.when, amount: entry.meta.income ? entry.value : -entry.value, merchant: entry.merchant, category: entry.meta.key });
+    tx.set({ date: entry.when, amount: signed(entry, entry.value), merchant: entry.merchant, category: entry.meta.key });
+    tx.original = originalOf(entry); // undefined when now in the home currency: clears an old conversion
     await tx.save();
     await AgentAction.logUser(
       req.user._id,
@@ -256,7 +291,7 @@ function normalizeScan(raw, today) {
         date,
       };
     })
-    .filter((it) => it.amount > 0 && it.amount <= 1_000_000)
+    .filter((it) => it.amount > 0 && it.amount < 1e10) // may be yen or won; the size is checked in home currency on save
     .slice(0, MAX_ITEMS);
   return { readable: raw.readable !== false && items.length > 0, currency: raw.currency || null, items };
 }
@@ -294,16 +329,20 @@ exports.postScanSave = async (req, res, next) => {
   try {
     const items = Array.isArray(req.body?.items) ? req.body.items : [];
     if (!items.length || items.length > MAX_ITEMS) return res.status(400).json({ error: req.t('Send between 1 and {max} rows.', { max: MAX_ITEMS }) });
-    const entries = items.map((it) => validateEntry({ category: it.category, amount: it.amount, note: it.merchant, date: it.date }));
+    const currency = await accountCurrency(req.user._id);
+    // one currency for the whole image (the review sheet lets the user correct it); converted per row
+    const entries = [];
+    for (const it of items) {
+      entries.push(await inHome(validateEntry({ category: it.category, amount: it.amount, note: it.merchant, date: it.date }), req.body.currency, currency));
+    }
     const bad = entries.findIndex((e) => e.problem);
     if (bad !== -1) return res.status(400).json({ error: req.t('Row {n}: {problem}', { n: bad + 1, problem: req.t(entries[bad].problem) }) });
-    const currency = await accountCurrency(req.user._id);
     await Transaction.insertMany(entries.map((e) => toDoc(req.user._id, currency, e, 'scan')));
     await AgentAction.create({
       user: req.user._id,
       tool: 'scan_image_save',
       tier: 'write',
-      args: { rows: entries.length },
+      args: { rows: entries.length, currency: req.body.currency || currency },
       status: 'confirmed',
       decidedAt: new Date(),
       result: { saved: entries.length },

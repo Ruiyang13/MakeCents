@@ -151,7 +151,8 @@ MakeCents is a prototype, not a regulated financial service. We designed it with
   - **purpose limitation:** data is used only to answer the user;
   - **right to erasure:** one-click account and data deletion;
   - **transparency:** the operation log.
-  - **notice and consent:** sign-up explains what is sent to the AI provider and records the user's acknowledgement.
+  - **notice and consent:** sign-up explains what is sent to the AI provider and records the user's acknowledgement;
+    the only other outside service, for exchange rates, receives a currency code and no user data.
 - **Not financial advice:** the assistant analyses the user's own spending and says so; it does not
   recommend financial products.
 - **Human oversight of AI:** every change and every money movement proposed by the AI needs explicit

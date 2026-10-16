@@ -71,12 +71,13 @@
     if (tool === 'delete_budget') return t('Remove {cat} budget', { cat: t(args.category) });
     if (tool === 'add_transaction') {
       const sign = args.direction === 'in' ? '+' : '−';
-      return t('Record {amount} at {merchant} ({cat}, {date})', {
-        amount: sign + args.amount,
+      const what = t('Record {amount} at {merchant} ({cat}, {date})', {
+        amount: sign + args.amount + (args.currency ? ` ${args.currency}` : ''),
         merchant: args.merchant,
         cat: t(args.category),
         date: args.date || t('today'),
       });
+      return args.currency ? `${what} · ${t("converted at today's rate")}` : what;
     }
     if (tool === 'transfer_to_goal') return t('Move {amount} from the sandbox account to {goal}', { amount: args.amount, goal: args.goal });
     if (tool === 'pay_bill') return t('Pay {merchant} {amount} from the sandbox account', { merchant: args.merchant, amount: args.amount });
@@ -321,6 +322,7 @@
     const errorEl = document.getElementById('scan-error');
     const saveScan = document.getElementById('scan-save');
     const preview = document.getElementById('scan-preview');
+    const scanCurrency = document.getElementById('scan-currency');
     let active = null; // the scan currently open in the review sheet
 
     // Downsize in the browser (max 1600px, JPEG) so uploads stay small and fast.
@@ -364,6 +366,17 @@
       row.read = () => (keep.checked ? { merchant: merchant.value, amount: amount.value.trim(), category: cat.value, date: date.value } : null);
       return row;
     }
+    // amounts in another currency are converted to the home currency when saved
+    function showConversion() {
+      const foreign = active && scanCurrency.value !== active.accountCurrency;
+      warn.hidden = !foreign;
+      if (foreign)
+        warn.textContent = t("Amounts are in {cur}. They'll be converted to {account} at today's rate when you save; the original amounts are kept.", {
+          cur: scanCurrency.value,
+          account: active.accountCurrency,
+        });
+    }
+    scanCurrency.addEventListener('change', showConversion);
     const updateSave = () => {
       const n = [...rowsEl.children].filter((r) => r.read()).length;
       saveScan.textContent = n === 1 ? t('Save 1 entry') : t('Save {n} entries', { n });
@@ -375,11 +388,9 @@
       active = scan;
       preview.src = scan.dataUrl;
       rowsEl.replaceChildren(...scan.items.map(rowFor));
-      warn.hidden = !(scan.currency && scan.currency !== scan.accountCurrency);
-      warn.textContent = t('The image shows {cur}, but your account records {account}. Amounts are saved as typed, without conversion; edit them if needed.', {
-        cur: scan.currency,
-        account: scan.accountCurrency,
-      });
+      // the detected currency if it is one we know, else the home currency; the user can change it
+      scanCurrency.value = [...scanCurrency.options].some((o) => o.value === scan.currency) ? scan.currency : scan.accountCurrency;
+      showConversion();
       errorEl.hidden = true;
       updateSave();
       scanModal.show();
@@ -480,7 +491,7 @@
         const r = await fetch('/finance/record/scan/save', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf() },
-          body: JSON.stringify({ items }),
+          body: JSON.stringify({ items, currency: scanCurrency.value }),
         });
         const d = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);

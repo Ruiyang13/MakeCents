@@ -14,6 +14,7 @@ const SavingsGoal = require('../models/SavingsGoal');
 const SandboxAccount = require('../models/SandboxAccount');
 const FixedCost = require('../models/FixedCost');
 const User = require('../models/User');
+const fx = require('../config/fx');
 const { detectBills, fixedClassifier } = require('./bills');
 const { buildRecommendations } = require('./recommendations');
 const { planAll, monthlyPicture } = require('./goals');
@@ -157,13 +158,23 @@ const WRITE_ACTIONS = {
   add_transaction: {
     description: 'Record a purchase or income the user tells you about (e.g. cash spending). Does NOT take effect until the user confirms it in the UI.',
     schema: z.object({
-      amount: z.number().positive().max(1_000_000).describe('Absolute amount, always positive'),
+      amount: z.number().positive().max(1e10).describe('Absolute amount, always positive, in the currency paid'),
+      currency: z
+        .enum(User.CURRENCIES)
+        .optional()
+        .describe("ISO code of the currency paid, only when it isn't the user's home currency (e.g. JPY for yen in Tokyo); the app converts it"),
       direction: z.enum(['out', 'in']).default('out').describe('out = spending (default), in = income/refund'),
       merchant: z.string().trim().min(1).max(80).describe('Where the money went, e.g. "Mala hotpot"'),
       category: CATEGORY,
       date: z.string().optional().describe('ISO date YYYY-MM-DD; defaults to today'),
     }),
-    validate: async (userId, { category, date }) => {
+    validate: async (userId, { amount, currency, category, date }) => {
+      try {
+        const { value } = await fx.toHome(amount, currency, await User.currencyOf(userId));
+        if (value > 1_000_000) return 'Amount is too large.';
+      } catch {
+        return "Couldn't get today's exchange rate; ask the user to try again or give the amount in their home currency.";
+      }
       const known = DEFAULT_CATEGORIES.includes(category) || (await Transaction.exists({ user: userId, category }));
       if (!known) return `Unknown category "${category}". Use one of the user's categories or: ${DEFAULT_CATEGORIES.join(', ')}.`;
       const when = date ? new Date(date) : new Date();
@@ -172,12 +183,17 @@ const WRITE_ACTIONS = {
       if (when < new Date(Date.now() - 366 * DAY_MS)) return 'Date is more than a year ago.';
       return null;
     },
-    run: async (userId, { amount, direction, merchant, category, date }) => {
+    run: async (userId, { amount, currency, direction, merchant, category, date }) => {
+      // paid in another currency: converted at today's rate (at confirmation), what was paid is kept
+      const home = await User.currencyOf(userId);
+      const { value, original } = await fx.toHome(amount, currency, home);
+      const sign = direction === 'in' ? 1 : -1;
       const t = await Transaction.create({
         user: userId,
         date: date ? new Date(date) : new Date(),
-        amount: direction === 'in' ? amount : -amount,
-        currency: await User.currencyOf(userId),
+        amount: sign * value,
+        currency: home,
+        original: original ? { ...original, amount: sign * original.amount } : undefined,
         merchant,
         category,
         description: 'Added via assistant',
@@ -619,7 +635,8 @@ Understanding the user:
 Rules:
 - Never invent numbers. If a tool returns nothing, say so.
 - Amounts from tools: negative = money out, positive = money in. get_spending_by_category and get_monthly_summary already report spending as positive numbers.
-- Use the currency listed under "Your data". Do not convert currencies.
+- All figures from tools are in the home currency listed under "Your data"; use it. Never convert currencies yourself.
+- If the user paid in another currency ("3000 yen for ramen", "€12 taxi in Paris", "刚在东京花了3000日元"), pass that amount with its currency code to add_transaction; the app converts it to the home currency at today's rate and keeps the original.
 - Lead with the direct answer and the key figure, then 1-3 concrete, actionable suggestions. No generic advice.
 - When the user asks "why" a month was expensive, compare it to other months with get_monthly_summary, then drill in with get_transactions.
 - For savings goals ("am I on track for…", "how much should I put aside"), use get_savings_goals. Users create goals on the Goals tab.
@@ -854,6 +871,7 @@ exports.getFinanceAgent = async (req, res) => {
   const sandbox = { balance: money.format(account.balance), perMove: money.format(MOVE_LIMIT), perDay: money.format(DAILY_MOVE_LIMIT) };
   res.render('finance/agent', {
     title: 'Assistant',
+    currencies: User.CURRENCIES, // scan review: the currency on the receipt
     chatMessages: priorMessages,
     pendingActions,
     heatmap,

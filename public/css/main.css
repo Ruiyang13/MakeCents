@@ -1311,6 +1311,34 @@ h1,
   font-size: 1.5rem;
   color: var(--muted);
 }
+/* currency paid: a quiet code next to the amount; highlighted when it isn't the home currency */
+.rec-cur {
+  align-self: center;
+  margin-right: auto;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  padding: 0.2rem 0.4rem;
+  cursor: pointer;
+}
+.rec-cur.foreign {
+  color: var(--crimson);
+  border-color: var(--crimson);
+  background: color-mix(in srgb, var(--crimson) 8%, transparent);
+}
+.rec-fx {
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-align: right;
+  margin: -0.6rem 0 0.8rem;
+}
+.rec-fx a {
+  color: inherit;
+}
 .rec-display #rec-display {
   font-size: 2.8rem;
   line-height: 1;
@@ -1546,6 +1574,22 @@ h1,
 }
 .hist-amt.in {
   color: var(--sage);
+}
+/* what was actually paid, for money spent in another currency */
+.hist-orig {
+  display: block;
+  text-align: right;
+  font-weight: 500;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.scan-currency {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.scan-currency select {
+  width: auto;
 }
 .hist-del {
   margin: 0;

@@ -10,20 +10,47 @@
   const saveBtn = document.getElementById('rec-save');
   let value = '';
 
+  // Currency paid: the home currency unless the user picks another (e.g. while abroad). The last pick is remembered
+  // in this browser so a trip doesn't mean choosing it every time; the sheet flags anything that isn't home.
+  const curSelect = document.getElementById('rec-currency');
+  const fxNote = document.getElementById('rec-fx');
+  const home = curSelect.dataset.home;
+  const remembered = () => {
+    try {
+      return localStorage.getItem('rec-currency');
+    } catch {
+      return null;
+    }
+  };
+  function setCurrency(code) {
+    curSelect.value = [...curSelect.options].some((o) => o.value === code) ? code : home;
+    const foreign = curSelect.value !== home;
+    curSelect.classList.toggle('foreign', foreign);
+    fxNote.hidden = !foreign;
+  }
+  curSelect.addEventListener('change', () => {
+    setCurrency(curSelect.value);
+    try {
+      localStorage.setItem('rec-currency', curSelect.value);
+    } catch {
+      /* private mode: just not remembered */
+    }
+  });
+
   function render() {
     display.textContent = value || '0';
     amountInput.value = value;
     saveBtn.disabled = !(Number(value) > 0);
   }
 
-  // Keep input a valid money string: up to 7 digits, one dot, two decimals.
+  // Keep input a valid money string: up to 10 digits (yen and won run large), one dot, two decimals.
   function press(k) {
     if (k === 'back') value = value.slice(0, -1);
     else if (k === '.') {
       if (!value.includes('.')) value = (value || '0') + '.';
     } else if (/^\d$/.test(k)) {
       const [int, dec] = value.split('.');
-      if (dec !== undefined ? dec.length < 2 : int.length < 7) value = value === '0' ? k : value + k;
+      if (dec !== undefined ? dec.length < 2 : int.length < 10) value = value === '0' ? k : value + k;
     }
     render();
   }
@@ -41,6 +68,7 @@
       catWrap.hidden = true;
       form.elements.note.value = '';
       form.elements.date.value = form.elements.date.defaultValue;
+      setCurrency(remembered() || home);
       value = '';
       render();
       modal.show();
@@ -55,7 +83,7 @@
   });
   document.querySelectorAll('.hist-edit').forEach((b) =>
     b.addEventListener('click', () => {
-      const { id, category, amount, note, date } = b.dataset;
+      const { id, category, amount, currency, note, date } = b.dataset;
       form.action = `/finance/record/${id}`;
       document.getElementById('rec-category').value = category;
       catSelect.value = category;
@@ -68,6 +96,7 @@
       saveBtn.textContent = t('Save changes');
       form.elements.note.value = note;
       form.elements.date.value = date;
+      setCurrency(currency); // what was actually paid, so the amount reads as entered
       value = amount;
       render();
       modal.show();

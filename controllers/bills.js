@@ -266,6 +266,7 @@ function spendingHistory(rows, bills, excluded) {
       merchant: t.merchant,
       category: t.category,
       amount: t.amount,
+      original: t.original?.currency ? t.original : null, // paid in another currency
       fixed: isFixed(t),
       nextDue: latestOfBill ? bill.nextDue : null,
       flags: latestOfBill ? bill.flags.filter((f) => f.type !== 'due') : [],

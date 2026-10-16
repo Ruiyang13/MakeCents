@@ -8,6 +8,8 @@ const transactionSchema = new mongoose.Schema(
     date: { type: Date, required: true },
     amount: { type: Number, required: true },
     currency: { type: String, default: 'GBP' },
+    // money spent in another currency: what was actually paid, and the rate used to get `amount` (home currency)
+    original: { amount: Number, currency: String, rate: Number },
     merchant: { type: String, required: true },
     description: String,
     category: { type: String, required: true },

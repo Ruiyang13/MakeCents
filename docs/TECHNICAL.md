@@ -78,18 +78,18 @@ test/             automated tests
 
 ### 1.4 Data model
 
-| Collection                                | Key fields                                                                                    | Notes                                                                                                                                         |
-| ----------------------------------------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `users`                                   | `email` (unique, normalised), `password` (bcrypt), `name`, `currency`, `totp`                 | `currency` is chosen at sign-up from an allow-list of 18 ISO 4217 codes; `totp` holds the two-step sign-in secret and the last used time step |
-| `transactions`                            | `user`, `date`, `amount` (negative = money out), `currency`, `merchant`, `category`, `source` | `source`: imported, `manual`, `scan` or `sandbox`. Only `manual` and `scan` rows can be edited or deleted by the user                         |
-| `budgets`                                 | `user`, `category`, `monthlyLimit`                                                            | One per category; repeats every month                                                                                                         |
-| `savinggoals`                             | `user`, `name`, `target`, `deadline`, `contributions[]`                                       | `saved` is derived (sum of contributions), never stored                                                                                       |
-| `fixedcosts`                              | `user`, `merchant`, `key`, `fixed`, `monthly`, `category`, `day`                              | The user's corrections to fixed-cost detection, one per merchant (`{ user, key }` unique): a fixed amount, or "never fixed" (section 4.2)     |
-| `chatthreads`                             | `user`, `threadId`, `title`                                                                   | Index of conversations; messages live in the checkpoint collections                                                                           |
-| `agentactions`                            | `user`, `tool`, `tier`, `args`, `status`, `result`, `error`, `decidedAt`                      | Operation log **and** queue of proposals awaiting confirmation                                                                                |
-| `sandboxaccounts`                         | `user` (unique), `balance`                                                                    | Simulated current account for money movement; opened with 2,500; only confirmed move-tier actions change it                                   |
-| `finance_agent_checkpoints` (+ `_writes`) | LangGraph state per `thread_id`                                                               | Conversation memory                                                                                                                           |
-| `sessions`                                | server-side session data                                                                      | Managed by `connect-mongo`                                                                                                                    |
+| Collection                                | Key fields                                                                                                               | Notes                                                                                                                                         |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `users`                                   | `email` (unique, normalised), `password` (bcrypt), `name`, `currency`, `totp`                                            | `currency` is chosen at sign-up from an allow-list of 18 ISO 4217 codes; `totp` holds the two-step sign-in secret and the last used time step |
+| `transactions`                            | `user`, `date`, `amount` (negative = money out, home currency), `currency`, `original`, `merchant`, `category`, `source` | `source`: imported, `manual`, `scan` or `sandbox`. Only `manual` and `scan` rows can be edited or deleted by the user                         |
+| `budgets`                                 | `user`, `category`, `monthlyLimit`                                                                                       | One per category; repeats every month                                                                                                         |
+| `savinggoals`                             | `user`, `name`, `target`, `deadline`, `contributions[]`                                                                  | `saved` is derived (sum of contributions), never stored                                                                                       |
+| `fixedcosts`                              | `user`, `merchant`, `key`, `fixed`, `monthly`, `category`, `day`                                                         | The user's corrections to fixed-cost detection, one per merchant (`{ user, key }` unique): a fixed amount, or "never fixed" (section 4.2)     |
+| `chatthreads`                             | `user`, `threadId`, `title`                                                                                              | Index of conversations; messages live in the checkpoint collections                                                                           |
+| `agentactions`                            | `user`, `tool`, `tier`, `args`, `status`, `result`, `error`, `decidedAt`                                                 | Operation log **and** queue of proposals awaiting confirmation                                                                                |
+| `sandboxaccounts`                         | `user` (unique), `balance`                                                                                               | Simulated current account for money movement; opened with 2,500; only confirmed move-tier actions change it                                   |
+| `finance_agent_checkpoints` (+ `_writes`) | LangGraph state per `thread_id`                                                                                          | Conversation memory                                                                                                                           |
+| `sessions`                                | server-side session data                                                                                                 | Managed by `connect-mongo`                                                                                                                    |
 
 Every query in every controller and tool filters by the signed-in user's id. There are no
 cross-user queries anywhere in the app.
@@ -142,13 +142,13 @@ sheet; only **Save** writes them, and each row passes the same validation as a h
 
 ## 2. The agent
 
-### 2.1 Tools
+### 2.1 Interface
 
-The agent can only touch data through these tools. Each tool is created per request with the
+The agent can only touch data through these interfaces. Each interface is created per request with the
 signed-in user's id fixed inside it, so the model cannot ask for another user's data: there is no
 user-id parameter to fill in.
 
-| Tool                       | Tier                 | What it does                                                                            |
+| Interface                  | Tier                 | What it does                                                                            |
 | -------------------------- | -------------------- | --------------------------------------------------------------------------------------- |
 | `get_spending_by_category` | read                 | Spending per category over a period or date range                                       |
 | `get_transactions`         | read                 | Filtered transaction list (category, merchant, direction, minimum amount; max 100 rows) |
@@ -316,7 +316,8 @@ images. Defences are layered so that a successful injection still can't do damag
 ### 3.7 Privacy
 
 - **Data sent to Anthropic:** chat messages, tool results (the user's own transaction data) and
-  uploaded images, in order to answer. Nothing is sent to any other third party.
+  uploaded images, in order to answer. No user data is sent to any other third party; the exchange-rate service
+  (4.9) receives only a currency code.
 - **Image storage:** uploaded images are not stored; only the extracted rows the user saves.
 - **Notice and consent:** sign-up explains in plain language what is sent to Anthropic, and the account is
   created only after the user ticks that they understand; the time of consent is stored.
@@ -482,6 +483,25 @@ The savings jar is decorative, but deterministic:
 - **Goal reached:** the progress bar turns green.
 - **Reduced motion:** users with reduced motion enabled see the final state with no animation.
 
+### 4.9 Money in other currencies (`config/fx.js`)
+
+Each user has one **home currency** (chosen at sign-up); every amount is stored and analysed in it, so budgets,
+goals and insights never mix currencies. Money paid in another currency, e.g. while travelling, can be entered in
+that currency from the Record keypad, a scanned receipt (the review sheet starts from the currency Claude detected),
+or the assistant (`add_transaction` takes an optional `currency`, and the prompt tells the model never to convert
+by itself):
+
+- **Conversion:** amount × today's rate, rounded to cents (at least 0.01), checked against the same 1,000,000
+  limit in the home currency. Foreign amounts may have up to 10 digits, for currencies like yen and won.
+- **Kept:** the transaction stores `original: { amount, currency, rate }`; history shows both ("−£23.85, JP¥5,000"),
+  and editing starts from what was paid. Editing back to the home currency removes the conversion.
+- **Rates:** ExchangeRate-API's open endpoint (no key, updated daily, all 18 supported currencies), cached for
+  12 hours per home currency. Only a currency code is sent. If no rate can be fetched, nothing is saved and the user
+  is asked to retry or enter the amount in the home currency.
+- **Limit:** backdated entries use today's rate, not the rate on that date.
+
+Changing the home currency on the Account page relabels amounts; it does not convert past data.
+
 ---
 
 ## 5. Internationalisation and accessibility
@@ -570,3 +590,4 @@ dependencies only and runs as a non-root user). Setup and hosting steps are in t
   `THIRD_PARTY_LICENSE-hackathon-starter.txt`.
 - **Charts:** our own SVG code (`public/js/bills-charts.js`) and canvas code (`public/js/jar.js`); no chart library.
 - **AI model:** Anthropic Claude, via the Anthropic API.
+- **Exchange rates:** ExchangeRate-API open access (https://www.exchangerate-api.com), credited where conversion is offered.

@@ -17,11 +17,11 @@ block content
             label.form-label(for='email')= t('Email')
             input#email.form-control(type='email', name='email', autocomplete='email', required)
           .mb-3
-            label.form-label(for='currency')= t('Currency')
+            label.form-label(for='currency')= t('Home currency')
             select#currency.form-select(name='currency', required)
               each c in currencies
                 option(value=c.code, selected=c.code === 'GBP')= c.label
-            .form-text= t('Amounts are recorded and shown in this currency. You can change it later in Account.')
+            .form-text= t('Your home currency: budgets, goals and insights use it. Money spent in other currencies is converted automatically.')
           .mb-3
             label.form-label(for='password')= t('Password')
             input#password.form-control(type='password', name='password', minlength='8', maxlength='128', autocomplete='new-password', required)

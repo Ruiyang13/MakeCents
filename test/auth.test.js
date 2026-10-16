@@ -230,6 +230,51 @@ describe('Auth & route protection', () => {
       ]);
     });
 
+    it('records money paid in another currency: converted to the home currency, original kept', async () => {
+      const fx = require('../config/fx');
+      const realRate = fx.rate;
+      fx.rate = async (from) => {
+        if (from === 'JPY') return 0.005; // 1 yen = £0.005
+        throw new Error('offline');
+      };
+      try {
+        await post({ category: 'DiningOut', amount: '5000', note: 'Ichiran', currency: 'JPY' });
+        const t = await Transaction.findOne({ user: user._id, merchant: 'Ichiran' }).lean();
+        expect(t).to.include({ amount: -25, currency: 'GBP' });
+        expect(t.original).to.deep.equal({ amount: -5000, currency: 'JPY', rate: 0.005 });
+        // history shows what was paid; editing starts from it
+        const page = await agent.get('/finance/record').expect(200);
+        expect(page.text).to.include('JP¥5,000').and.include('data-currency="JPY"');
+        // edited back to the home currency: the conversion goes
+        await agent
+          .post(`/finance/record/${t._id}`)
+          .type('form')
+          .send({ _csrf: csrf, category: 'DiningOut', amount: '24', note: 'Ichiran', currency: 'GBP' })
+          .expect(302);
+        const edited = await Transaction.findById(t._id).lean();
+        expect(edited.amount).to.equal(-24);
+        expect(edited.original?.currency).to.equal(undefined);
+        // a scanned receipt in yen: every row converted
+        const today = new Date().toISOString().slice(0, 10);
+        await agent
+          .post('/finance/record/scan/save')
+          .set('X-CSRF-Token', csrf)
+          .send({ currency: 'JPY', items: [{ merchant: 'Lawson', amount: '800', category: 'Groceries', date: today }] })
+          .expect(200);
+        expect(await Transaction.findOne({ user: user._id, merchant: 'Lawson' }).lean()).to.deep.include({
+          amount: -4,
+          original: { amount: -800, currency: 'JPY', rate: 0.005 },
+        });
+        // no rate (offline) or a currency we don't offer: nothing is saved
+        await post({ category: 'DiningOut', amount: '10', note: 'Offline', currency: 'EUR' });
+        await post({ category: 'DiningOut', amount: '10', note: 'Fake', currency: 'XYZ' });
+        expect(await Transaction.exists({ user: user._id, merchant: { $in: ['Offline', 'Fake'] } })).to.equal(null);
+        await Transaction.deleteMany({ user: user._id, merchant: { $in: ['Ichiran', 'Lawson'] } });
+      } finally {
+        fx.rate = realRate;
+      }
+    });
+
     it('operation log: your own changes are logged; the page and CSV/JSON downloads work', async () => {
       await post({ category: 'Shopping', amount: '3', note: 'Log check' });
       const page = await agent.get('/finance/audit').expect(200);

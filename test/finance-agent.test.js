@@ -130,6 +130,21 @@ describe('Finance Agent tools & permissions', () => {
     await Transaction.deleteMany({ source: 'manual' });
   });
 
+  it('add_transaction converts money paid in another currency at confirmation, keeping the original', async () => {
+    const fx = require('../config/fx');
+    const realRate = fx.rate;
+    fx.rate = async () => 0.005; // 1 yen = £0.005
+    try {
+      const res = await call('add_transaction', { amount: 3000, currency: 'JPY', merchant: 'Ramen', category: 'DiningOut' });
+      await _decideAction(userId, res.actionId, true);
+      const t = await Transaction.findOne({ user: userId, merchant: 'Ramen' }).lean();
+      expect(t).to.deep.include({ amount: -15, currency: 'GBP', original: { amount: -3000, currency: 'JPY', rate: 0.005 } });
+    } finally {
+      fx.rate = realRate;
+      await Transaction.deleteMany({ source: 'manual' });
+    }
+  });
+
   it('add_transaction rejects future dates and unknown categories', async () => {
     const future = new Date(Date.now() + 5 * 864e5).toISOString().slice(0, 10);
     expect((await call('add_transaction', { amount: 5, merchant: 'X', category: 'DiningOut', date: future })).error).to.match(/future/);
