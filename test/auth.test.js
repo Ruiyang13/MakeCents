@@ -242,9 +242,13 @@ describe('Auth & route protection', () => {
         const t = await Transaction.findOne({ user: user._id, merchant: 'Ichiran' }).lean();
         expect(t).to.include({ amount: -25, currency: 'GBP' });
         expect(t.original).to.deep.equal({ amount: -5000, currency: 'JPY', rate: 0.005 });
-        // history shows what was paid; editing starts from it
+        // every row records a currency: one created without it gets the home currency, never a guess
+        const bare = await Transaction.create({ user: user._id, date: new Date(), amount: -1, merchant: 'Corner shop', category: 'Other' });
+        expect(bare.currency).to.equal('GBP');
+        // history shows the currency every payment was made in, and what was paid abroad; editing starts from it
         const page = await agent.get('/finance/record').expect(200);
-        expect(page.text).to.include('JP¥5,000').and.include('data-currency="JPY"');
+        expect(page.text).to.include('JP¥5,000 · JPY').and.include('data-currency="JPY"').and.include('<small class="hist-orig">GBP</small>');
+        await bare.deleteOne();
         // edited back to the home currency: the conversion goes
         await agent
           .post(`/finance/record/${t._id}`)

@@ -160,7 +160,7 @@ exports.postRecord = async (req, res, next) => {
     await AgentAction.logUser(
       req.user._id,
       'record_entry',
-      { category: meta.key, amount: tx.amount, original: tx.original?.currency ? tx.original : undefined, merchant, date: tx.date },
+      { category: meta.key, amount: tx.amount, currency: tx.currency, original: tx.original?.currency ? tx.original : undefined, merchant, date: tx.date },
       { id: tx._id },
     );
     req.flash('success', {
@@ -187,15 +187,16 @@ exports.postUpdateRecord = async (req, res, next) => {
       req.flash('errors', { msg: 'Entry not found.' });
       return res.redirect('/finance/record#history');
     }
-    const before = { category: tx.category, amount: tx.amount, merchant: tx.merchant, date: tx.date };
-    tx.set({ date: entry.when, amount: signed(entry, entry.value), merchant: entry.merchant, category: entry.meta.key });
+    const paid = (t) => t.original?.currency || t.currency;
+    const before = { category: tx.category, amount: tx.amount, currency: tx.currency, paidIn: paid(tx), merchant: tx.merchant, date: tx.date };
+    tx.set({ date: entry.when, amount: signed(entry, entry.value), currency, merchant: entry.merchant, category: entry.meta.key });
     tx.original = originalOf(entry); // undefined when now in the home currency: clears an old conversion
     await tx.save();
     await AgentAction.logUser(
       req.user._id,
       'edit_entry',
       { id: tx._id, before },
-      { category: tx.category, amount: tx.amount, merchant: tx.merchant, date: tx.date },
+      { category: tx.category, amount: tx.amount, currency: tx.currency, paidIn: paid(tx), merchant: tx.merchant, date: tx.date },
     );
     req.flash('success', { msg: 'Entry updated.' });
     res.redirect('/finance/record#history');

@@ -500,6 +500,11 @@ by itself):
   is asked to retry or enter the amount in the home currency.
 - **Limit:** backdated entries use today's rate, not the rate on that date.
 
+**Every transaction records its currency.** \`currency\` is required; a row created without one (e.g. by a script) gets
+the user's home currency, never a guessed default. Spending history shows each row in its own currency and names
+the currency it was paid in on every row (\"GBP\", or \"JP¥5,000 · JPY\" for money paid abroad), which the search box
+also matches. The assistant's transaction lookups and the operation log carry the same information.
+
 Changing the home currency on the Account page relabels amounts; it does not convert past data.
 
 ---

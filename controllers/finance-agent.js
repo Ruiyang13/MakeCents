@@ -402,6 +402,9 @@ function buildTools(userId, t = (s, v) => (v ? s.replace(/\{(\w+)\}/g, (m, k) =>
           merchant: r.merchant,
           category: r.category,
           amount: r.amount,
+          currency: r.currency,
+          // paid in another currency: what was actually paid (amount above is converted)
+          ...(r.original?.currency ? { paid: { amount: r.original.amount, currency: r.original.currency } } : {}),
           account: r.account,
           description: r.description,
         })),

@@ -64,7 +64,7 @@ block content
                 span.num= t('{amount} out', { amount: money(day.out) })
             ul
               each tx in day.items
-                li.hist-row(data-search=`${tx.merchant} ${tx.category} ${cat(tx.category)} ${Math.abs(tx.amount).toFixed(2)}`.toLowerCase(), data-kind=`${tx.fixed ? 'fixed ' : ''}${tx.source}`)
+                li.hist-row(data-search=`${tx.merchant} ${tx.category} ${cat(tx.category)} ${Math.abs(tx.amount).toFixed(2)} ${tx.paidIn}`.toLowerCase(), data-kind=`${tx.fixed ? 'fixed ' : ''}${tx.source}`)
                   span.rec-glyph.sm(class=`tone-${tx.style.tone}`)
                     i.fas(class=tx.style.icon)
                   .hist-main
@@ -82,10 +82,9 @@ block content
                       each f in tx.flags
                         span.hist-tag.warn= f.text
                   span.hist-amt.num(class=tx.amount > 0 ? 'in' : '')
-                    | #{ tx.amount > 0 ? '+' : '−' }#{ money(Math.abs(tx.amount)) }
-                    //- paid in another currency: what was actually paid
-                    if tx.original
-                      small.hist-orig= moneyIn(Math.abs(tx.original.amount), tx.original.currency)
+                    | #{ tx.amount > 0 ? '+' : '−' }#{ moneyIn(Math.abs(tx.amount), tx.currency) }
+                    //- every payment shows the currency it was made in; another currency also shows what was paid
+                    small.hist-orig= (tx.original ? `${moneyIn(Math.abs(tx.original.amount), tx.original.currency)} · ` : '') + tx.paidIn
                   if tx.deletable
                     - const d = new Date(tx.date);
                     - const meta = categories.find((c) => c.key === tx.category);
