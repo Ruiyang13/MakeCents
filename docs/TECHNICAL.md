@@ -69,7 +69,7 @@ controllers/
   budgets.js         monthly budgets table
   records.js         manual entry and receipt / screenshot scanning
   user.js            sign up, sign in, account settings, account deletion
-models/           User, Transaction, Budget, SavingsGoal, ChatThread, AgentAction
+models/           User, Transaction, Budget, SavingsGoal, FixedCost, ChatThread, AgentAction
 views/            Pug templates
 public/           CSS and browser JS (chat client, charts, savings jar)
 scripts/          demo data seeding, agent tool smoke test
@@ -81,9 +81,10 @@ test/             automated tests
 | Collection                                | Key fields                                                                                    | Notes                                                                                                                                         |
 | ----------------------------------------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `users`                                   | `email` (unique, normalised), `password` (bcrypt), `name`, `currency`, `totp`                 | `currency` is chosen at sign-up from an allow-list of 18 ISO 4217 codes; `totp` holds the two-step sign-in secret and the last used time step |
-| `transactions`                            | `user`, `date`, `amount` (negative = money out), `currency`, `merchant`, `category`, `source` | `source`: imported, `manual`, `scan` or `sandbox`. Only `manual` and `scan` rows can be deleted by the user                                   |
+| `transactions`                            | `user`, `date`, `amount` (negative = money out), `currency`, `merchant`, `category`, `source` | `source`: imported, `manual`, `scan` or `sandbox`. Only `manual` and `scan` rows can be edited or deleted by the user                         |
 | `budgets`                                 | `user`, `category`, `monthlyLimit`                                                            | One per category; repeats every month                                                                                                         |
 | `savinggoals`                             | `user`, `name`, `target`, `deadline`, `contributions[]`                                       | `saved` is derived (sum of contributions), never stored                                                                                       |
+| `fixedcosts`                              | `user`, `merchant`, `key`, `fixed`, `monthly`, `category`, `day`                              | The user's corrections to fixed-cost detection, one per merchant (`{ user, key }` unique): a fixed amount, or "never fixed" (section 4.2)     |
 | `chatthreads`                             | `user`, `threadId`, `title`                                                                   | Index of conversations; messages live in the checkpoint collections                                                                           |
 | `agentactions`                            | `user`, `tool`, `tier`, `args`, `status`, `result`, `error`, `decidedAt`                      | Operation log **and** queue of proposals awaiting confirmation                                                                                |
 | `sandboxaccounts`                         | `user` (unique), `balance`                                                                    | Simulated current account for money movement; opened with 2,500; only confirmed move-tier actions change it                                   |
@@ -257,8 +258,8 @@ The confirmation protocol (`decideAction` in `controllers/finance-agent.js`):
 Changes the user makes on the app's own forms (Record, Budgets, Goals, Account) are direct user actions, not
 agent actions; they are validated server-side the same way. Scanned receipt rows are logged as
 `scan_image` (read) and `scan_image_save` (write, user-confirmed). Form changes are logged too, with tier `user`
-(entries recorded or deleted, budgets saved, goals created, added to, taken from or deleted, profile, password and
-two-step sign-in changes).
+(entries recorded, edited or deleted, budgets saved, goals created, added to, taken from or deleted, fixed costs
+corrected, profile, password and two-step sign-in changes). An edit logs the entry before and after the change.
 
 ### 3.3 Prompt-injection containment
 
@@ -282,11 +283,12 @@ images. Defences are layered so that a successful injection still can't do damag
 - **Agent tools:** created per request with `userId` captured inside them; every query includes
   `user: userId`.
 - **Confirmations:** confirm/reject routes match `{ _id, user }`, so another user's action ids return 404.
-- **Goals and records:** goal and record routes check ownership (`findOne({ _id, user })`), and
-  invalid ids are rejected before querying.
+- **Goals and records:** goal and record routes (add, edit, delete) check ownership (`findOne({ _id, user })`), and
+  invalid ids are rejected before querying. Editing, like deleting, is limited to the user's own `manual` and `scan` entries.
+- **Fixed-cost corrections:** stored and looked up by `{ user, key }`, so one user's corrections never touch another's bills.
 - **Chat threads:** a thread id from the browser is used only if it belongs to the user.
-- **Account deletion:** removes the user, transactions, budgets, goals, chat threads, agent
-  checkpoints and the audit log.
+- **Account deletion:** removes the user, transactions, budgets, goals, fixed-cost corrections, the sandbox account,
+  chat threads, agent checkpoints and the audit log.
 
 ### 3.5 Web application security
 
@@ -298,7 +300,7 @@ images. Defences are layered so that a successful injection still can't do damag
 | Open redirects            | Post-login return path must be a same-site relative path (`/…`, not `//…`)                                                                                                                                                                                                                                                                                        |
 | CSRF                      | `lusca.csrf()` on all non-GET requests (forms and `fetch` with `X-CSRF-Token`)                                                                                                                                                                                                                                                                                    |
 | Headers                   | **Content-Security-Policy** with a per-request nonce (`script-src 'self' 'nonce-…'`, no inline event handlers, no eval, `object-src 'none'`, `frame-ancestors 'self'`; inline `style` attributes allowed); HSTS when served over HTTPS; `X-Frame-Options: SAMEORIGIN`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`; `X-Powered-By` disabled |
-| Rate limits               | Global 300 requests / 15 min; login 20 / hour; two-step code 10 / 15 min; sign-up 10 / hour; chat 10 / min; scan 10 / min; manual record 30 / min; scan save 20 / min                                                                                                                                                                                             |
+| Rate limits               | Global 300 requests / 15 min; login 20 / hour; two-step code 10 / 15 min; sign-up 10 / hour; chat 10 / min; scan 10 / min; manual record and record edit 30 / min each; scan save 20 / min                                                                                                                                                                        |
 | Input validation          | Money as strict regex (≤ 2 decimals, bounded); categories and currencies from allow-lists; dates bounded; chat messages ≤ 2000 characters; JSON body 100 KB, except the scan route at 8 MB; images must be JPEG/PNG/WebP/GIF, valid base64, about 5 MB at most                                                                                                    |
 | Output                    | AI Markdown rendered with `marked` then sanitised with DOMPurify; Pug auto-escapes; JSON embedded in pages escapes `<`                                                                                                                                                                                                                                            |
 | Unauthenticated API calls | Return 401 JSON (no redirect loops for `fetch`)                                                                                                                                                                                                                                                                                                                   |
@@ -369,31 +371,48 @@ pace chart and category split, the recommendations and the goal planner all use 
 spending only, and show fixed costs separately. Transfers into savings (category `Savings`, including
 sandbox transfers into goals) move money rather than spend it, so they are left out of spending entirely.
 
+**User corrections** (the Fixed costs card on Insights, stored in `fixedcosts`, one per merchant). Detection is a
+guess, so the user can override it, and every view above follows because they all go through `detectBills`:
+
+- **Correct an amount:** a detected bill keeps its due date and flags, but its monthly amount is the one the user set.
+- **Not fixed:** the merchant is never a bill and never fixed, even if its category is a fixed-cost one.
+- **Add by hand:** a fixed cost the data can't see (rent paid in cash, a new contract), with an optional due day.
+  It is always active; if the merchant name matches transactions, those count as fixed too.
+- **Undo / remove:** deletes the correction, and detection decides again.
+
+A hand-added cost with no payment in the last 45 days is **unrecorded**: it still leaves the account every month, so the
+goal planner (4.4) and the cash-flow rule (4.3) subtract it. Otherwise cash rent would look like spare money.
+
 ### 4.3 Recommendation engine (`controllers/recommendations.js`)
 
-Nine rules each produce a recommendation with **evidence** (the numbers behind it), an **action**, a
-ready-made **question** to ask the agent, and, where it can be estimated, a **yearly saving**:
+Ten rules each produce a recommendation with **evidence** (the numbers behind it), an **action**, a
+ready-made **question** to ask the agent behind a verb button ("Set this budget", "Make a plan", "Choose what to
+cancel"…), and, where it can be estimated, a **yearly saving**. Actions name what is behind the pattern and give a
+figure to act on, not generic advice: the merchant driving a category's rise, the most frequent small purchase, the
+category that weekends go on, the daily amount that keeps a budget.
 
-| #   | Rule                      | Trigger                                                                                                                   | Yearly saving                   |
-| --- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
-| 1   | Category creep            | Last 30 days ≥ 125% of the average of the three 30-day windows before, at least 25 more, and a usual level of at least 20 | (recent − usual) × 12           |
-| 2   | Food delivery             | ≥ 4 delivery orders in 30 days (merchant patterns incl. Deliveroo, Uber Eats, Meituan 美团, Ele.me 饿了么)                | half of the delivery spend × 12 |
-| 3   | Overlapping subscriptions | 2+ active services in one group                                                                                           | all but the most expensive × 12 |
-| 4   | Bill price rise / spike   | Flags from 4.1                                                                                                            | rise × 12 (price rise only)     |
-| 5   | Fees                      | ≥ 15 in fees over 90 days; advice tailored to interest/late fees vs FX/transfer fees                                      | 90-day fees × 4                 |
-| 6   | Cash flow                 | 90-day outgoings (excluding savings transfers) exceed income → **warning**; savings rate < 10% → tip                      |                                 |
-| 7   | Weekend effect            | Everyday spend per weekend day ≥ 1.6 × per weekday over 8 weeks (and at least 10 more)                                    |                                 |
-| 8   | Small purchases           | ≥ 12 purchases under 10 in 30 days                                                                                        |                                 |
-| 9   | Unbudgeted top category   | Biggest everyday category ≥ 100 in 30 days, with no budget                                                                |                                 |
+| #   | Rule                      | Trigger                                                                                                                                                                                                                      | Yearly saving                    |
+| --- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| 0   | Budget pace               | A budget already exceeded, or (from day 7) projected > 110% of the limit and at least 10 over → **warning**; action: the daily amount that keeps it (remaining ÷ days left), or pause / raise the budget                     |                                  |
+| 1   | Category creep            | Last 30 days ≥ 125% of the average of the three 30-day windows before, at least 25 more, and a usual level of at least 20; names the merchant that drove it                                                                  | (recent − usual) × 12            |
+| 2   | Food delivery             | ≥ 4 delivery orders in 30 days (merchant patterns incl. Deliveroo, Uber Eats, Meituan 美团, Ele.me 饿了么); names the most-used service                                                                                      | half of the delivery spend × 12  |
+| 3   | Overlapping subscriptions | 2+ active services in one group                                                                                                                                                                                              | all but the most expensive × 12  |
+| 4   | Bill price rise / spike   | Flags from 4.1                                                                                                                                                                                                               | rise × 12 (price rise only)      |
+| 5   | Fees                      | ≥ 15 in fees over 90 days; advice tailored to interest/late fees vs FX/transfer fees                                                                                                                                         | 90-day fees × 4                  |
+| 6   | Cash flow                 | 90-day outgoings (excluding savings transfers, plus unrecorded hand-added fixed costs) exceed income → **warning**, naming the biggest everyday category and how much of the gap a 20% trim closes; savings rate < 10% → tip |                                  |
+| 7   | Weekend effect            | Everyday spend per weekend day ≥ 1.6 × per weekday over 8 weeks (and at least 10 more); names the top weekend category and suggests a weekend allowance halfway back to the weekday pace                                     | (weekend spend − allowance) × 52 |
+| 8   | Small purchases           | ≥ 12 purchases under 10 in 30 days; names the most frequent merchant                                                                                                                                                         | half of that merchant × 12       |
+| 9   | Unbudgeted top category   | Biggest everyday category ≥ 100 in 30 days, with no budget; suggests the user's own average month, rounded up to 10                                                                                                          |                                  |
 
 **Ranking:** severity first (warning, then saving, then tip), then by estimated yearly saving, at most 6
-shown. Everyday spending only (4.2), so rent never shows up as "creep".
+shown. The card heads the list with the total of the yearly savings shown. Everyday spending only (4.2), so rent never shows up as "creep".
 
 ### 4.4 Savings goal planner (`controllers/goals.js`)
 
 For each goal, from the user's own last 90 days:
 
-- **Monthly left-over** = (income − spending excluding savings transfers) ÷ 3.
+- **Monthly left-over** = (income − spending excluding savings transfers) ÷ 3, minus unrecorded hand-added fixed
+  costs (4.2).
 - **Usual everyday spending** per category = 90-day everyday total ÷ 3.
 
 The plan:
@@ -456,8 +475,11 @@ The savings jar is decorative, but deterministic:
 - **Seeded layout:** a random generator seeded per goal gives each jar the same layout of coins and
   notes on every page load.
 - **Fill level:** the number of pieces is proportional to progress.
-- **New money only:** when the user adds money, only that jar animates, and only the new pieces drop
-  in, with a floating "+amount" label.
+- **Only the jar that changed:** when the user adds money, only that jar animates, and only the new pieces drop
+  in, with a floating "+amount" label. When money is taken out, the old pile settles first, then the pieces on top
+  rise to the neck and fly out of the mouth, fading, under a red "−amount" label. At least one piece moves even
+  for an amount too small to add or remove a whole piece.
+- **Goal reached:** the progress bar turns green.
 - **Reduced motion:** users with reduced motion enabled see the final state with no animation.
 
 ---
@@ -491,14 +513,14 @@ npm run check-tools  # runs every agent tool against seeded demo data
 npm run evidence     # 16-step sandbox scenario, writes docs/evidence/ (operation log + summary)
 ```
 
-| Suite                         | What it proves                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `finance-agent.test.js`       | Read tools run and are logged; write tools only propose; confirm applies, reject never runs; no double decisions; another user can't confirm; expired proposals can't run; pending cap; invalid categories, limits and dates rejected; regex characters in merchant search treated literally; budget status; calendar scaling; **sandbox money movement**: proposal only, balance before/after logged, unknown goals and over-limit amounts refused, daily limit, no overdraft, bills only, authenticator code required when two-step sign-in is on; **prompt injection**: instructions hidden in transaction data can't pay, transfer or change budgets, every attempt is logged as refused, and no tool takes a user parameter; CSV export is formula-safe |
-| `auth.test.js`                | Sign-up (including currency and the AI processing notice), sign-in, generic login errors, return-to after login, 401 for signed-out API calls, CSRF rejection, CSP nonce on every inline script and no inline handlers, two-step sign-in (setup, code required, replay refused, turning off needs password and code, RFC 6238 vectors), account deletion removes data; Record, Budgets, Goals and Insights pages including ownership checks; operation log page and CSV/JSON downloads; receipt scan: cleaning, non-image rejection, all-or-nothing save; Chinese rendering; chat threads                                                                                                                                                                    |
-| `bills.test.js`               | Bill detection (and that habits and income are not bills), due dates, higher-than-usual and inactive flags, overlaps, income share, history, percentages add to 100, fixed vs everyday                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `recommendations.test.js`     | Cash-flow warning first, creep and its saving, delivery, overlaps, fee-specific advice, ranking and the cap of 6                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `goals.test.js`               | Per-week/month amounts, fits, trims (max 20%, biggest first), realistic date, on track vs behind, jar levels, sharing left-over between goals                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `i18n.test.js`, `css.test.js` | Every string translated with matching placeholders; every page has its styles                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Suite                         | What it proves                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `finance-agent.test.js`       | Read tools run and are logged; write tools only propose; confirm applies, reject never runs; no double decisions; another user can't confirm; expired proposals can't run; pending cap; invalid categories, limits and dates rejected; regex characters in merchant search treated literally; budget status; calendar scaling; **sandbox money movement**: proposal only, balance before/after logged, unknown goals and over-limit amounts refused, daily limit, no overdraft, bills only, authenticator code required when two-step sign-in is on; **prompt injection**: instructions hidden in transaction data can't pay, transfer or change budgets, every attempt is logged as refused, and no tool takes a user parameter; CSV export is formula-safe                                                                    |
+| `auth.test.js`                | Sign-up (including currency and the AI processing notice), sign-in, generic login errors, return-to after login, 401 for signed-out API calls, CSRF rejection, CSP nonce on every inline script and no inline handlers, two-step sign-in (setup, code required, replay refused, turning off needs password and code, RFC 6238 vectors), account deletion removes data; Record (including editing entries: same validation, own manual/scan entries only), Budgets, Goals (add and take-out animation state) and Insights pages including ownership checks; fixed-cost corrections (add, correct, not fixed, undo, per user); account deletion also removes fixed-cost corrections; operation log page and CSV/JSON downloads; receipt scan: cleaning, non-image rejection, all-or-nothing save; Chinese rendering; chat threads |
+| `bills.test.js`               | Bill detection (and that habits and income are not bills), due dates, higher-than-usual and inactive flags, overlaps, income share, history, percentages add to 100, fixed vs everyday, user corrections (amount, not fixed, added by hand, unrecorded total)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `recommendations.test.js`     | Warnings first, budget pace with the daily figure, creep (naming the merchant) and its saving, delivery, overlaps, fee-specific advice, ranking and the cap of 6                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `goals.test.js`               | Per-week/month amounts, fits, trims (max 20%, biggest first), realistic date, on track vs behind, jar levels, sharing left-over between goals                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `i18n.test.js`, `css.test.js` | Every string translated with matching placeholders; every page has its styles                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 
 **Execution evidence.** `npm run evidence` seeds a demo household into a throwaway in-memory database and
 runs 16 steps through the agent's real tools and confirm function: reads, a confirmed and a rejected proposal,

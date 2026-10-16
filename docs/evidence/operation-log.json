@@ -1,7 +1,7 @@
 [
   {
-    "id": "6ac87c098871209d257e9bc0",
-    "time": "2026-10-09T05:30:49.091Z",
+    "id": "6ad1daf44ee77f2d58820bdf",
+    "time": "2026-10-16T08:06:12.665Z",
     "tier": "read",
     "action": "get_monthly_summary",
     "status": "executed",
@@ -13,8 +13,8 @@
     "decidedAt": null
   },
   {
-    "id": "6ac87c098871209d257e9bc1",
-    "time": "2026-10-09T05:30:49.121Z",
+    "id": "6ad1daf44ee77f2d58820be0",
+    "time": "2026-10-16T08:06:12.696Z",
     "tier": "read",
     "action": "get_recurring_bills",
     "status": "executed",
@@ -24,8 +24,8 @@
     "decidedAt": null
   },
   {
-    "id": "6ac87c098871209d257e9bc2",
-    "time": "2026-10-09T05:30:49.143Z",
+    "id": "6ad1daf44ee77f2d58820be1",
+    "time": "2026-10-16T08:06:12.716Z",
     "tier": "read",
     "action": "get_recommendations",
     "status": "executed",
@@ -35,8 +35,8 @@
     "decidedAt": null
   },
   {
-    "id": "6ac87c098871209d257e9bc9",
-    "time": "2026-10-09T05:30:49.166Z",
+    "id": "6ad1daf44ee77f2d58820be8",
+    "time": "2026-10-16T08:06:12.733Z",
     "tier": "read",
     "action": "get_savings_goals",
     "status": "executed",
@@ -46,8 +46,8 @@
     "decidedAt": null
   },
   {
-    "id": "6ac87c098871209d257e9bca",
-    "time": "2026-10-09T05:30:49.178Z",
+    "id": "6ad1daf44ee77f2d58820be9",
+    "time": "2026-10-16T08:06:12.743Z",
     "tier": "read",
     "action": "get_sandbox_account",
     "status": "executed",
@@ -57,8 +57,8 @@
     "decidedAt": null
   },
   {
-    "id": "6ac87c098871209d257e9bcb",
-    "time": "2026-10-09T05:30:49.186Z",
+    "id": "6ad1daf44ee77f2d58820bea",
+    "time": "2026-10-16T08:06:12.750Z",
     "tier": "write",
     "action": "set_budget",
     "status": "confirmed",
@@ -67,20 +67,20 @@
       "monthlyLimit": 250
     },
     "result": {
-      "_id": "6ac87c0997580b3a774b7651",
+      "_id": "6ad1daf4c184dd38a9a154ce",
       "category": "DiningOut",
-      "user": "6ac87c088871209d257e9aad",
+      "user": "6ad1daf44ee77f2d58820abc",
       "__v": 0,
-      "createdAt": "2026-10-09T05:30:49.200Z",
+      "createdAt": "2026-10-16T08:06:12.760Z",
       "monthlyLimit": 250,
-      "updatedAt": "2026-10-09T05:30:49.200Z"
+      "updatedAt": "2026-10-16T08:06:12.760Z"
     },
     "error": null,
-    "decidedAt": "2026-10-09T05:30:49.193Z"
+    "decidedAt": "2026-10-16T08:06:12.754Z"
   },
   {
-    "id": "6ac87c098871209d257e9bcc",
-    "time": "2026-10-09T05:30:49.218Z",
+    "id": "6ad1daf44ee77f2d58820beb",
+    "time": "2026-10-16T08:06:12.776Z",
     "tier": "write",
     "action": "add_transaction",
     "status": "rejected",
@@ -92,11 +92,11 @@
     },
     "result": null,
     "error": null,
-    "decidedAt": "2026-10-09T05:30:49.220Z"
+    "decidedAt": "2026-10-16T08:06:12.777Z"
   },
   {
-    "id": "6ac87c098871209d257e9bd3",
-    "time": "2026-10-09T05:30:49.247Z",
+    "id": "6ad1daf44ee77f2d58820bf2",
+    "time": "2026-10-16T08:06:12.799Z",
     "tier": "move",
     "action": "transfer_to_goal",
     "status": "confirmed",
@@ -107,18 +107,18 @@
     "result": {
       "from": "sandbox current account",
       "to": "Family holiday",
-      "goalId": "6ac87c098871209d257e9bb7",
+      "goalId": "6ad1daf44ee77f2d58820bd6",
       "pctBefore": 25,
       "amount": 100,
       "balanceBefore": 2500,
       "balanceAfter": 2400
     },
     "error": null,
-    "decidedAt": "2026-10-09T05:30:49.253Z"
+    "decidedAt": "2026-10-16T08:06:12.804Z"
   },
   {
-    "id": "6ac87c098871209d257e9be4",
-    "time": "2026-10-09T05:30:49.299Z",
+    "id": "6ad1daf44ee77f2d58820c03",
+    "time": "2026-10-16T08:06:12.873Z",
     "tier": "move",
     "action": "pay_bill",
     "status": "confirmed",
@@ -134,11 +134,11 @@
       "balanceAfter": 2388.43
     },
     "error": null,
-    "decidedAt": "2026-10-09T05:30:49.304Z"
+    "decidedAt": "2026-10-16T08:06:12.877Z"
   },
   {
-    "id": "6ac87c098871209d257e9bea",
-    "time": "2026-10-09T05:30:49.339Z",
+    "id": "6ad1daf44ee77f2d58820c09",
+    "time": "2026-10-16T08:06:12.911Z",
     "tier": "move",
     "action": "transfer_to_goal",
     "status": "refused",
@@ -151,8 +151,8 @@
     "decidedAt": null
   },
   {
-    "id": "6ac87c098871209d257e9beb",
-    "time": "2026-10-09T05:30:49.351Z",
+    "id": "6ad1daf44ee77f2d58820c0a",
+    "time": "2026-10-16T08:06:12.923Z",
     "tier": "move",
     "action": "pay_bill",
     "status": "refused",
@@ -165,8 +165,8 @@
     "decidedAt": null
   },
   {
-    "id": "6ac87c098871209d257e9bf0",
-    "time": "2026-10-09T05:30:49.361Z",
+    "id": "6ad1daf44ee77f2d58820c0f",
+    "time": "2026-10-16T08:06:12.933Z",
     "tier": "move",
     "action": "transfer_to_goal",
     "status": "confirmed",
@@ -177,18 +177,18 @@
     "result": {
       "from": "sandbox current account",
       "to": "Family holiday",
-      "goalId": "6ac87c098871209d257e9bb7",
+      "goalId": "6ad1daf44ee77f2d58820bd6",
       "pctBefore": 29,
       "amount": 450,
       "balanceBefore": 2388.43,
       "balanceAfter": 1938.43
     },
     "error": null,
-    "decidedAt": "2026-10-09T05:30:49.365Z"
+    "decidedAt": "2026-10-16T08:06:12.936Z"
   },
   {
-    "id": "6ac87c098871209d257e9c00",
-    "time": "2026-10-09T05:30:49.386Z",
+    "id": "6ad1daf44ee77f2d58820c1f",
+    "time": "2026-10-16T08:06:12.984Z",
     "tier": "move",
     "action": "transfer_to_goal",
     "status": "refused",
@@ -201,8 +201,8 @@
     "decidedAt": null
   },
   {
-    "id": "6ac87c098871209d257e9c04",
-    "time": "2026-10-09T05:30:49.395Z",
+    "id": "6ad1daf44ee77f2d58820c23",
+    "time": "2026-10-16T08:06:12.994Z",
     "tier": "move",
     "action": "transfer_to_goal",
     "status": "rejected",
@@ -212,11 +212,11 @@
     },
     "result": null,
     "error": null,
-    "decidedAt": "2026-10-09T05:30:49.401Z"
+    "decidedAt": "2026-10-16T08:06:12.998Z"
   },
   {
-    "id": "6ac87c098871209d257e9c09",
-    "time": "2026-10-09T05:14:49.411Z",
+    "id": "6ad1daf54ee77f2d58820c28",
+    "time": "2026-10-16T07:50:13.009Z",
     "tier": "move",
     "action": "transfer_to_goal",
     "status": "expired",
@@ -226,11 +226,11 @@
     },
     "result": null,
     "error": null,
-    "decidedAt": "2026-10-09T05:30:49.417Z"
+    "decidedAt": "2026-10-16T08:06:13.015Z"
   },
   {
-    "id": "6ac87c098871209d257e9c0d",
-    "time": "2026-10-09T05:30:49.432Z",
+    "id": "6ad1daf54ee77f2d58820c2c",
+    "time": "2026-10-16T08:06:13.029Z",
     "tier": "move",
     "action": "transfer_to_goal",
     "status": "confirmed",
@@ -241,13 +241,13 @@
     "result": {
       "from": "sandbox current account",
       "to": "Boiler replacement fund",
-      "goalId": "6ac87c098871209d257e9bbb",
+      "goalId": "6ad1daf44ee77f2d58820bda",
       "pctBefore": 10,
       "amount": 20,
       "balanceBefore": 1938.43,
       "balanceAfter": 1918.43
     },
     "error": null,
-    "decidedAt": "2026-10-09T05:30:49.449Z"
+    "decidedAt": "2026-10-16T08:06:13.045Z"
   }
 ]
