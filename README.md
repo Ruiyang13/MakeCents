@@ -14,13 +14,18 @@ Submission documents:
 
 ## Features
 
-| Tab           | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Assistant** | Chat with the agent (Claude) in English or Chinese; voice input; click or drop a receipt or payment screenshot under the chat bar, AI reads it and you confirm every row. This month's everyday-spending calendar, with fixed costs listed apart. Chat history is kept.                                                                                                                                                                                       |
-| **Insights**  | This month's spending against last month at the same point (interactive pace chart), a category pie chart with changes, then ranked recommendations that name the merchant or category behind each pattern, give a figure to act on (e.g. a daily amount that keeps a budget) and an estimated yearly saving, plus bill alerts. A Fixed costs card lets you correct detected bills, mark something as not fixed, or add one by hand (e.g. rent paid in cash). |
-| **Record**    | Card-style bookkeeping (卡片式记账): tap a category, key in the amount. Budget bars per card. Spent abroad? Pick the currency on the keypad (or scan a foreign receipt, or tell the assistant): it is converted to your home currency at today's rate and the original amount is kept. Searchable, filterable spending history grouped by day; your own entries can be edited or deleted.                                                                     |
-| **Budgets**   | Every category's monthly budget in one table, with usual spending and progress. Budgets repeat every month.                                                                                                                                                                                                                                                                                                                                                   |
-| **Goals**     | Savings goals with a glass jar of coins and notes that fills up (new money drops in, money taken out flies out; the bar turns green when the goal is reached), and an automatic plan: per week / per month, whether it fits what's usually left over, which categories to trim, or a realistic date.                                                                                                                                                          |
+- **Assistant:** chat with the agent (Claude) in English or Chinese, by text or voice. Drop a receipt or payment
+  screenshot under the chat bar; the AI reads it and you confirm every row. Shows this month's everyday-spending
+  calendar, with fixed costs listed apart. Chat history is kept.
+- **Insights:** this month's spending against last month at the same point (pace chart), a category pie chart, and
+  ranked recommendations that name the merchant or category behind each pattern, with a figure to act on and an
+  estimated yearly saving. Bill alerts, and a Fixed costs card to correct, dismiss or add recurring bills.
+- **Record:** card-style bookkeeping (卡片式记账): tap a category, key in the amount, with budget bars per card.
+  Foreign currency is converted to your home currency at today's rate, keeping the original amount. Searchable
+  history grouped by day; your own entries can be edited or deleted.
+- **Budgets:** every category's monthly budget in one table, with usual spending and progress.
+- **Goals:** savings goals shown as a glass jar that fills up, with an automatic plan: per week or month, whether it
+  fits what's usually left over, which categories to trim, or a realistic date.
 
 ### Safety model
 
@@ -88,14 +93,15 @@ Tests use an in-memory MongoDB and stub the Claude calls, so they need no API ke
 
 ```
 app.js            Express app: security middleware, routes
-config/           login (passport), flash messages, categories, i18n (English keys + i18n-zh.json)
-controllers/      finance-agent (agent, tools, permissions, calendar), bills, recommendations,
-                  records (card entry + receipt scan), budgets, goals, user (accounts), home
-models/           User, Transaction, Budget, SavingsGoal, ChatThread, AgentAction (audit log + pending confirmations)
-views/            Pug templates (not auto-formatted: the Prettier Pug plugin breaks some valid templates)
+config/           login (passport), two-step codes, categories, currency rates, i18n (English keys + i18n-zh.json)
+controllers/      finance-agent (agent, tools, permissions), bills, recommendations, records (card entry + receipt
+                  scan), budgets, goals, user (accounts), home
+models/           User, Transaction, Budget, SavingsGoal, ChatThread, AgentAction (operation log + pending confirmations)
+views/            Pug templates (formatted by hand: the Prettier Pug plugin breaks some valid templates)
 public/           CSS and browser JS
-scripts/          demo data seed, tool smoke test
+scripts/          demo data seed, tool smoke test, evidence run, test-case report
 test/             mocha tests
+docs/             submission documents and execution evidence
 ```
 
 ## Credits
