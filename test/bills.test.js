@@ -97,4 +97,27 @@ describe('Bill analysis', () => {
     expect(isFixed({ merchant: 'Landlord', category: 'Rent' })).to.equal(true); // fixed category
     expect(isFixed({ merchant: 'Tesco', category: 'Groceries' })).to.equal(false);
   });
+
+  it("applies the user's corrections: an amount, 'not fixed', and a cost added by hand", async () => {
+    const FixedCost = require('../models/FixedCost');
+    await FixedCost.create([
+      { user, merchant: 'Hulu', key: 'hulu', fixed: false },
+      { user, merchant: 'Netflix', key: 'netflix', fixed: true, monthly: 10.99, category: 'Subscriptions' },
+      { user, merchant: 'Landlord', key: 'landlord', fixed: true, monthly: 800, category: 'Rent', day: 1 },
+    ]);
+    const fixed = await detectBills(user, now);
+    const by = (name) => fixed.bills.find((b) => b.merchant === name);
+    expect(by('Hulu')).to.equal(undefined);
+    expect(by('Netflix')).to.include({ monthly: 10.99, edited: true });
+    expect(by('Netflix').nextDue.toDateString()).to.equal(new Date(2026, 9, 8).toDateString()); // still detected
+    expect(by('Landlord')).to.include({ monthly: 800, manual: true, unrecorded: true, active: true });
+    expect(by('Landlord').nextDue.toDateString()).to.equal(new Date(2026, 9, 1).toDateString());
+    expect(fixed.monthlyTotal).to.equal(10.99 + 1480 + 60 + 800);
+    expect(fixed.unrecordedMonthly).to.equal(800);
+    // 'not fixed' wins even over a fixed-cost category
+    const isFixed = fixedClassifier(fixed.bills, fixed.excluded);
+    expect(isFixed({ merchant: 'Hulu', category: 'Subscriptions' })).to.equal(false);
+    expect(isFixed({ merchant: 'Landlord', category: 'Other' })).to.equal(true);
+    await FixedCost.deleteMany({ user });
+  });
 });

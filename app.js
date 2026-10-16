@@ -127,6 +127,7 @@ app.post('/finance/actions/:id/reject', isAuthenticated, financeController.postF
 app.get('/finance/audit', isAuthenticated, financeController.getFinanceAudit);
 app.get('/finance/audit/export', isAuthenticated, financeController.getFinanceAuditExport);
 app.get('/finance/bills', isAuthenticated, billsController.getBills);
+app.post('/finance/fixed', isAuthenticated, billsController.postFixedCost);
 app.get('/finance/record', isAuthenticated, recordsController.getRecord);
 app.post('/finance/record', isAuthenticated, limit(1, 30), recordsController.postRecord);
 app.get('/finance/budgets', isAuthenticated, budgetsController.getBudgets);
@@ -138,6 +139,7 @@ app.post('/finance/goals/:id/delete', isAuthenticated, goalsController.postDelet
 app.post('/finance/record/:id/delete', isAuthenticated, recordsController.postDeleteRecord);
 app.post('/finance/record/scan', isAuthenticated, limit(1, 10), recordsController.postScan);
 app.post('/finance/record/scan/save', isAuthenticated, limit(1, 20), recordsController.postScanSave);
+app.post('/finance/record/:id', isAuthenticated, limit(1, 30), recordsController.postUpdateRecord); // after /scan, which :id would catch
 
 app.use((req, res) => res.status(404).render('error', { title: req.t('Not found'), message: req.t('That page does not exist.') }));
 // eslint-disable-next-line no-unused-vars

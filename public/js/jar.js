@@ -63,6 +63,7 @@
     const dark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
     return {
       ink: v('--ink'),
+      crimson: v('--crimson'),
       gold: v('--ochre'),
       sparkle: v('--ochre'),
       // cash bundle: face, side, paper band
@@ -88,6 +89,8 @@
 
   function makeJar(canvas) {
     const pct = clampPct(canvas.dataset.pct);
+    const from = canvas.dataset.from === undefined ? pct : clampPct(canvas.dataset.from);
+    const taking = from > pct; // money just came out: the top pieces fly out through the mouth
     const full = pct >= 100;
     const rand = rngFor(canvas.dataset.seed || 'jar');
     const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -100,7 +103,9 @@
 
     // Pieces come from the same seeded sequence every load, so the first n always settle the same way.
     const all = [];
-    for (let i = 0; i < pieces(pct); i++) {
+    // taking out: draw the old pile, at least one piece leaves even for an amount too small to remove a whole piece
+    const count = pieces(pct) + (taking ? Math.max(1, pieces(from) - pieces(pct)) : 0);
+    for (let i = 0; i < count; i++) {
       const cash = rand() < 0.45;
       all.push({
         cash,
@@ -121,8 +126,29 @@
     let parts = all;
     let time = 0;
 
+    // A leaving piece doesn't follow the physics: it rises to the neck, then out of the mouth and away, fading.
+    const ease = (u) => u * u * (3 - 2 * u);
+    function fly(p, dt) {
+      if (p.delay > 0) {
+        p.delay -= dt;
+        return;
+      }
+      p.t += dt;
+      const u1 = ease(Math.min(1, p.t / 0.45));
+      const u2 = ease(Math.max(0, Math.min(1, (p.t - 0.45) / 0.55)));
+      p.x = p.sx + (CX - p.sx) * u1 + (p.hue - 0.5) * 90 * u2;
+      p.y = p.sy + (NECK - p.sy) * u1 + (-OY - 10 - NECK) * u2;
+      p.a += (p.hue - 0.5) * 6 * dt;
+      p.alpha = 1 - u2;
+      if (p.t >= 1) p.gone = true;
+    }
+
     function step(dt) {
       for (const p of parts) {
+        if (p.leave) {
+          if (!p.gone) fly(p, dt);
+          continue;
+        }
         if (p.wait > 0) {
           p.wait -= dt;
           continue;
@@ -163,7 +189,7 @@
         for (let j = i + 1; j < parts.length; j++) {
           const a = parts[i];
           const b = parts[j];
-          if (a.wait > 0 || b.wait > 0) continue;
+          if (a.wait > 0 || b.wait > 0 || a.leave || b.leave) continue;
           const dx = b.x - a.x;
           const dy = b.y - a.y;
           const min = a.r + b.r - 2; // a little overlap reads as a heap
@@ -288,7 +314,7 @@
       ctx.save();
       poly(BODY);
       ctx.clip();
-      const shown = parts.filter((p) => p.wait <= 0).sort((a, b) => a.y - b.y);
+      const shown = parts.filter((p) => p.wait <= 0 && !p.gone && !(p.leave && p.y < MOUTH)).sort((a, b) => a.y - b.y);
       for (const p of shown) (p.cash ? bundle : coin)(p, c);
       ctx.restore();
 
@@ -330,6 +356,13 @@
         [CX - 34, MOUTH],
       ]);
       ctx.fill();
+      // pieces that have left through the mouth, in front of the glass, fading out
+      for (const p of parts) {
+        if (!p.leave || p.gone || p.y >= MOUTH) continue;
+        ctx.globalAlpha = p.alpha;
+        (p.cash ? bundle : coin)(p, c);
+      }
+      ctx.globalAlpha = 1;
       ctx.restore();
 
       // "+£50" rises from the mouth and fades while the money drops in
@@ -341,7 +374,7 @@
         ctx.textAlign = 'center';
         ctx.lineWidth = 4;
         ctx.strokeStyle = c.dark ? '#1c1c1a' : '#faf8f3';
-        ctx.fillStyle = c.coinEdge;
+        ctx.fillStyle = taking ? c.crimson : c.coinEdge;
         const ly = OY - 4 - Math.min(1, time / 1.2) * 14;
         ctx.strokeText(added, OX + CX, ly);
         ctx.fillText(added, OX + CX, ly);
@@ -369,10 +402,25 @@
 
     canvas.jar = { draw };
 
+    // Money just came out: the old pile settles, then the pieces on top fly out of the mouth.
+    if (taking) {
+      settle();
+      [...all]
+        .sort((a, b) => a.y - b.y)
+        .slice(0, all.length - pieces(pct))
+        .forEach((p, i) => Object.assign(p, { leave: true, delay: 0.25 + i * 0.12, sx: p.x, sy: p.y, t: 0, alpha: 1 }));
+      if (reduceMotion) {
+        parts = all.filter((p) => !p.leave);
+        settle();
+        return draw();
+      }
+      draw();
+      return animate();
+    }
+
     // What was already there rests on the bottom. If the amount just went up, the new pieces fall in.
-    const from = canvas.dataset.from === undefined ? pct : clampPct(canvas.dataset.from);
     // money just went in: at least one piece drops, even for an amount too small to add a whole piece
-    const before = canvas.dataset.from === undefined || pct < from ? all.length : Math.min(pieces(from), all.length - 1);
+    const before = canvas.dataset.from === undefined ? all.length : Math.min(pieces(from), all.length - 1);
     parts = all.slice(0, before);
     settle();
     const dropping = all.slice(before);
@@ -389,28 +437,31 @@
       p.wait = 0.25 + i * 0.12;
     });
     draw();
+    animate();
 
-    let last = 0;
-    let quiet = 0;
-    function frame(now) {
-      const dt = Math.min(1 / 30, (now - last) / 1000 || 1 / 60);
-      last = now;
-      time += dt;
-      step(dt / 2);
-      step(dt / 2);
-      draw();
-      const moving = parts.some((p) => p.wait > 0 || Math.abs(p.vx) + Math.abs(p.vy) > 4);
-      quiet = moving ? 0 : quiet + 1;
-      if (quiet < 30 || time < 2.4) requestAnimationFrame(frame); // keep going until the "+£" label has faded
+    function animate() {
+      let last = 0;
+      let quiet = 0;
+      function frame(now) {
+        const dt = Math.min(1 / 30, (now - last) / 1000 || 1 / 60);
+        last = now;
+        time += dt;
+        step(dt / 2);
+        step(dt / 2);
+        draw();
+        const moving = parts.some((p) => p.wait > 0 || (p.leave && !p.gone) || Math.abs(p.vx) + Math.abs(p.vy) > 4);
+        quiet = moving ? 0 : quiet + 1;
+        if (quiet < 30 || time < 2.4) requestAnimationFrame(frame); // keep going until the "+£" label has faded
+      }
+      // start once the jar is on screen, so the animation isn't missed
+      const io = new IntersectionObserver((es) => {
+        if (!es[0].isIntersecting) return;
+        io.disconnect();
+        last = performance.now();
+        requestAnimationFrame(frame);
+      });
+      io.observe(canvas);
     }
-    // start once the jar is on screen, so the drop isn't missed
-    const io = new IntersectionObserver((es) => {
-      if (!es[0].isIntersecting) return;
-      io.disconnect();
-      last = performance.now();
-      requestAnimationFrame(frame);
-    });
-    io.observe(canvas);
   }
 
   jars.forEach(makeJar);

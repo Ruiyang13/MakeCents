@@ -73,12 +73,12 @@ exports._planAll = planAll;
 // What's usually left over each month, and usual everyday spending per category (last 90 days / 3).
 async function monthlyPicture(userId, now) {
   const uid = new mongoose.Types.ObjectId(userId);
-  const [rows, { bills }, currency] = await Promise.all([
+  const [rows, { bills, excluded, unrecordedMonthly }, currency] = await Promise.all([
     Transaction.find({ user: uid, date: { $gte: new Date(now - 90 * DAY_MS), $lte: now } }).lean(),
     detectBills(uid, now),
     User.currencyOf(uid),
   ]);
-  const isFixed = fixedClassifier(bills);
+  const isFixed = fixedClassifier(bills, excluded);
   let income = 0;
   let out = 0;
   const usual = {};
@@ -89,7 +89,8 @@ async function monthlyPicture(userId, now) {
       if (!isFixed(t)) usual[t.category] = (usual[t.category] || 0) + -t.amount / 3;
     }
   }
-  return { freeCash: r2((income - out) / 3), usual, currency };
+  // hand-set fixed costs paid outside the data (e.g. rent in cash) still leave each month
+  return { freeCash: r2((income - out) / 3 - unrecordedMonthly), usual, currency };
 }
 exports._monthlyPicture = monthlyPicture;
 
@@ -111,7 +112,9 @@ exports.getGoals = async (req, res, next) => {
         deadline: g.deadline,
         plan,
         drop:
-          jarFrom?.id === g._id.toString() ? { from: jarFrom.pct, label: `+${(Number.isInteger(jarFrom.added) ? fmt0 : fmt).format(jarFrom.added)}` } : null,
+          jarFrom?.id === g._id.toString()
+            ? { from: jarFrom.pct, label: `${jarFrom.added < 0 ? '−' : '+'}${(Number.isInteger(jarFrom.added) ? fmt0 : fmt).format(Math.abs(jarFrom.added))}` }
+            : null,
       })),
       freeCash: picture.freeCash,
       money: (n) => fmt.format(n),
@@ -172,8 +175,11 @@ exports.postContribution = async (req, res, next) => {
       req.flash('errors', { msg: req.t('You can take out at most {amount}.', { amount: goal.saved.toFixed(2) }) });
     } else {
       const wasFull = goal.saved >= goal.target;
-      // only money going in animates (new pieces drop into the jar)
-      if (req.body.direction !== 'take') req.session.jarFrom = { id: goal._id.toString(), pct: planFor(goal).pct, added: Number(raw) };
+      // the jar animates the change: new pieces drop in, or pieces fly out when money is taken
+      const take = req.body.direction === 'take';
+      // same rounding as the jar on the page (any money at all shows at least 1%)
+      const fromPct = goal.saved > 0 ? Math.max(1, planFor(goal).pct) : 0;
+      req.session.jarFrom = { id: goal._id.toString(), pct: fromPct, added: take ? -Number(raw) : Number(raw) };
       goal.contributions.push({ amount: req.body.direction === 'take' ? -Number(raw) : Number(raw), date: new Date() });
       await goal.save();
       await AgentAction.logUser(

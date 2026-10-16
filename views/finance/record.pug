@@ -83,6 +83,20 @@ block content
                         span.hist-tag.warn= f.text
                   span.hist-amt.num(class=tx.amount > 0 ? 'in' : '') #{ tx.amount > 0 ? '+' : '−' }#{ money(Math.abs(tx.amount)) }
                   if tx.deletable
+                    - const d = new Date(tx.date);
+                    - const meta = categories.find((c) => c.key === tx.category);
+                    span.hist-del
+                      button.hist-edit(
+                        type='button',
+                        data-id=tx.id,
+                        data-category=tx.category,
+                        data-amount=String(Math.abs(tx.amount)),
+                        data-note=meta && tx.merchant === meta.label ? '' : tx.merchant,
+                        data-date=`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
+                        aria-label=t('Edit {merchant}', { merchant: tx.merchant }),
+                        title=t('Edit')
+                      )
+                        i.fas.fa-pen
                     form.hist-del(method='POST', action=`/finance/record/${tx.id}/delete`, data-confirm=t('Delete this entry?'))
                       input(type='hidden', name='_csrf', value=_csrf)
                       button(type='submit', aria-label=t('Delete {merchant}', { merchant: tx.merchant }), title=t('Delete'))
@@ -117,6 +131,11 @@ block scripts
                 else
                   = k
           #rec-extra.row.g-2.mt-1
+            //- only when editing an entry: its category can change too
+            #rec-cat-wrap.col-12(hidden)
+              select#rec-cat-select.form-select(aria-label=t('Category'))
+                each c in categories
+                  option(value=c.key)= lang === 'zh' ? c.zh : c.label
             .col-7
               input.form-control(type='text', name='note', maxlength='80', placeholder=t('Note, e.g. Mala hotpot'), aria-label=t('Note'))
             .col-5

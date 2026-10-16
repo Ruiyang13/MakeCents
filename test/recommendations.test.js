@@ -2,6 +2,7 @@ const { expect } = require('chai');
 const mongoose = require('mongoose');
 const { MongoMemoryServer } = require('mongodb-memory-server');
 const Transaction = require('../models/Transaction');
+const Budget = require('../models/Budget');
 const { buildRecommendations } = require('../controllers/recommendations');
 
 // Synthetic household built to trigger specific signals; checks evidence, ranking and savings maths.
@@ -33,6 +34,9 @@ describe('Recommendations', () => {
     rows.push(tx(20, -45, 'Credit card minimum payment', 'Fees'));
     // Income lower than spending over 90 days -> cash-flow warning
     for (const age of [10, 40, 70]) rows.push(tx(age, 150, 'Payroll', 'Income'));
+    // Groceries: £95 of a £100 budget by the 25th -> on course for £114
+    rows.push(tx(3, -95, 'Tesco', 'Groceries'));
+    await Budget.create({ user, category: 'Groceries', monthlyLimit: 100 });
     await Transaction.create(rows);
     recs = await buildRecommendations(user, { now });
   });
@@ -42,10 +46,15 @@ describe('Recommendations', () => {
     await mongoServer.stop();
   });
 
-  it('puts the cash-flow warning first', () => {
-    expect(recs[0].kind).to.equal('cashflow');
-    expect(recs[0].severity).to.equal('warning');
-    expect(recs[0].title).to.match(/more than you earn/);
+  it('puts warnings first, including the cash-flow gap', () => {
+    expect(recs.slice(0, 2).map((r) => r.severity)).to.deep.equal(['warning', 'warning']);
+    expect(byKind('cashflow')[0].title).to.match(/more than you earn/);
+  });
+
+  it('warns when a budget is on course to be blown, with the daily figure that keeps it', () => {
+    const [p] = byKind('budget-pace');
+    expect(p.title).to.equal('At this pace Groceries ends the month £14 over budget');
+    expect(p.action).to.equal('Keep Groceries to £1 a day for the remaining 5 days to stay within budget.');
   });
 
   it('spots category creep and prices the saving as the monthly excess × 12', () => {
@@ -54,6 +63,7 @@ describe('Recommendations', () => {
     expect(creep.title).to.equal('Food is up 220% on your usual month');
     expect(creep.saving).to.equal((320 - 100) * 12);
     expect(creep.ask).to.equal('Set my Food budget to 100 a month');
+    expect(creep.action.startsWith('Pizza place was the biggest part (£220).')).to.equal(true);
   });
 
   it('flags frequent delivery orders', () => {

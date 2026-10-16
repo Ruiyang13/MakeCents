@@ -37,17 +37,48 @@
       document.getElementById('rec-sheet-icon').className = `fas ${icon}`;
       document.getElementById('rec-sheet-glyph').className = `rec-glyph ${card.querySelector('.rec-glyph').className.match(/tone-\d/)[0]}`;
       saveBtn.textContent = income ? t('Save income') : t('Save spending');
+      form.action = '/finance/record';
+      catWrap.hidden = true;
+      form.elements.note.value = '';
+      form.elements.date.value = form.elements.date.defaultValue;
       value = '';
       render();
       modal.show();
     });
   });
 
+  // Edit an entry from the history: the same sheet, prefilled, posting to /finance/record/:id.
+  const catWrap = document.getElementById('rec-cat-wrap');
+  const catSelect = document.getElementById('rec-cat-select');
+  catSelect.addEventListener('change', () => {
+    document.getElementById('rec-category').value = catSelect.value;
+  });
+  document.querySelectorAll('.hist-edit').forEach((b) =>
+    b.addEventListener('click', () => {
+      const { id, category, amount, note, date } = b.dataset;
+      form.action = `/finance/record/${id}`;
+      document.getElementById('rec-category').value = category;
+      catSelect.value = category;
+      catWrap.hidden = false;
+      document.getElementById('rec-title').textContent = t('Edit entry');
+      document.getElementById('rec-sub').textContent = '';
+      const glyph = b.closest('.hist-row').querySelector('.rec-glyph');
+      document.getElementById('rec-sheet-glyph').className = `rec-glyph ${glyph.className.match(/tone-\d/)[0]}`;
+      document.getElementById('rec-sheet-icon').className = glyph.querySelector('i').className;
+      saveBtn.textContent = t('Save changes');
+      form.elements.note.value = note;
+      form.elements.date.value = date;
+      value = amount;
+      render();
+      modal.show();
+    }),
+  );
+
   document.querySelectorAll('.rec-key').forEach((b) => b.addEventListener('click', () => press(b.dataset.k)));
 
   // Physical keyboard works too, unless the user is typing in the note/date fields.
   modalEl.addEventListener('keydown', (e) => {
-    if (e.target.matches('input')) return;
+    if (e.target.matches('input, select')) return;
     if (/^[\d.]$/.test(e.key)) press(e.key);
     else if (e.key === 'Backspace') press('back');
     else if (e.key === 'Enter' && !saveBtn.disabled) form.requestSubmit();

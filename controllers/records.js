@@ -61,7 +61,7 @@ exports.getRecord = async (req, res, next) => {
     const uid = new mongoose.Types.ObjectId(req.user._id);
     const now = new Date();
     // Spending history (below the cards): last ~6 months, grouped by day, newest first.
-    const [histRows, { bills }] = await Promise.all([
+    const [histRows, { bills, excluded }] = await Promise.all([
       Transaction.find({ user: uid, date: { $gte: new Date(now - LOOKBACK_DAYS * DAY_MS), $lte: now } })
         .sort({ date: -1, createdAt: -1 })
         .limit(1000)
@@ -69,7 +69,7 @@ exports.getRecord = async (req, res, next) => {
       detectBills(uid, now, { t: req.t }),
     ]);
     const historyDays = [];
-    for (const tx of spendingHistory(histRows, bills)) {
+    for (const tx of spendingHistory(histRows, bills, excluded)) {
       const d = new Date(tx.date);
       const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
       if (historyDays.at(-1)?.key !== key) {
@@ -134,6 +134,36 @@ exports.postRecord = async (req, res, next) => {
         (merchant !== meta.label ? ` · ${merchant}` : ''),
     });
     res.redirect('/finance/record');
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Edit an entry with the same keypad sheet and the same rules as a new one. Like delete, only the user's own entries.
+exports.postUpdateRecord = async (req, res, next) => {
+  const entry = validateEntry(req.body);
+  if (entry.problem) {
+    req.flash('errors', { msg: entry.problem });
+    return res.redirect('/finance/record#history');
+  }
+  try {
+    const tx =
+      mongoose.isValidObjectId(req.params.id) && (await Transaction.findOne({ _id: req.params.id, user: req.user._id, source: { $in: DELETABLE_SOURCES } }));
+    if (!tx) {
+      req.flash('errors', { msg: 'Entry not found.' });
+      return res.redirect('/finance/record#history');
+    }
+    const before = { category: tx.category, amount: tx.amount, merchant: tx.merchant, date: tx.date };
+    tx.set({ date: entry.when, amount: entry.meta.income ? entry.value : -entry.value, merchant: entry.merchant, category: entry.meta.key });
+    await tx.save();
+    await AgentAction.logUser(
+      req.user._id,
+      'edit_entry',
+      { id: tx._id, before },
+      { category: tx.category, amount: tx.amount, merchant: tx.merchant, date: tx.date },
+    );
+    req.flash('success', { msg: 'Entry updated.' });
+    res.redirect('/finance/record#history');
   } catch (error) {
     next(error);
   }

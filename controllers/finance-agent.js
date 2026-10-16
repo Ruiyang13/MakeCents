@@ -12,6 +12,7 @@ const AgentAction = require('../models/AgentAction');
 const ChatThread = require('../models/ChatThread');
 const SavingsGoal = require('../models/SavingsGoal');
 const SandboxAccount = require('../models/SandboxAccount');
+const FixedCost = require('../models/FixedCost');
 const User = require('../models/User');
 const { detectBills, fixedClassifier } = require('./bills');
 const { buildRecommendations } = require('./recommendations');
@@ -49,6 +50,7 @@ exports.deleteUserFinanceAgentData = async (userId) => {
     await SavingsGoal.deleteMany({ user: userId });
     await AgentAction.deleteMany({ user: userId });
     await SandboxAccount.deleteMany({ user: userId });
+    await FixedCost.deleteMany({ user: userId });
   } catch (error) {
     console.error(`Finance Agent: failed to delete chat data for ${userId}:`, error.message);
   }
@@ -740,14 +742,14 @@ async function dailySpendHeatmap(userId, now = new Date(), { t = (s, v) => (v ? 
   const first = new Date(now.getFullYear(), now.getMonth(), 1);
   const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
   // Fixed costs (rent, utilities, detected recurring bills…) are listed apart so one bill day doesn't skew the calendar.
-  const [rows, { bills }] = await Promise.all([
+  const [rows, { bills, excluded }] = await Promise.all([
     // savings transfers move money, they aren't spending
     Transaction.find({ user: userId, date: { $gte: first, $lt: next, $lte: now }, amount: { $lt: 0 }, category: { $ne: 'Savings' } })
       .sort({ date: 1 })
       .lean(),
     detectBills(userId, now),
   ]);
-  const isFixed = fixedClassifier(bills);
+  const isFixed = fixedClassifier(bills, excluded);
   const currency = await User.currencyOf(userId);
   const money = new Intl.NumberFormat('en-GB', { style: 'currency', currency });
   const spentBy = {};
@@ -887,6 +889,8 @@ const LOG_LABELS = {
   scan_image: 'read an image',
   scan_image_save: 'saved scanned rows',
   record_entry: 'recorded an entry',
+  edit_entry: 'edited an entry',
+  fixed_cost: 'changed a fixed cost',
   delete_entry: 'deleted an entry',
   save_budgets: 'saved budgets',
   create_goal: 'created a goal',

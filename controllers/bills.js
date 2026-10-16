@@ -1,6 +1,8 @@
 const mongoose = require('mongoose');
 const Transaction = require('../models/Transaction');
 const User = require('../models/User');
+const FixedCost = require('../models/FixedCost');
+const AgentAction = require('../models/AgentAction');
 // required lazily below: recommendations.js requires this module too
 const lazyRecs = () => require('./recommendations');
 
@@ -53,9 +55,11 @@ async function detectBills(userId, now = new Date(), { t = (s, v) => (v ? s.repl
   })
     .sort({ date: 1 })
     .lean();
-  const currency = await User.currencyOf(userId);
+  const [currency, rules] = await Promise.all([User.currencyOf(userId), FixedCost.find({ user: new mongoose.Types.ObjectId(userId) }).lean()]);
   const fmt = new Intl.NumberFormat('en-GB', { style: 'currency', currency });
   const money = (n) => fmt.format(n);
+  // the user's corrections: amounts for fixed costs, and merchants that are never fixed
+  const ruleOf = new Map(rules.map((r) => [r.key, r]));
 
   const byMerchant = new Map();
   for (const r of rows.filter((t) => t.amount < 0)) {
@@ -66,11 +70,13 @@ async function detectBills(userId, now = new Date(), { t = (s, v) => (v ? s.repl
 
   const bills = [];
   const spentByMonth = new Map(); // 'YYYY-M' -> money paid to recurring bills that month
-  for (const charges of byMerchant.values()) {
-    // A monthly restaurant or supermarket habit is still everyday spending, not a bill.
-    if (NEVER_BILL.has(charges.at(-1).category)) continue;
+  for (const [key, charges] of byMerchant) {
+    const rule = ruleOf.get(key);
+    if (rule && !rule.fixed) continue; // the user said it's not a fixed cost
+    // A monthly restaurant or supermarket habit is still everyday spending, not a bill (unless the user says so).
+    if (!rule && NEVER_BILL.has(charges.at(-1).category)) continue;
     const pattern = asMonthlyBill(charges);
-    if (!pattern) continue;
+    if (!pattern) continue; // a fixed cost the user set but no monthly pattern: added below as a hand-set bill
     for (const ch of charges) {
       const k = `${ch.date.getFullYear()}-${ch.date.getMonth()}`;
       spentByMonth.set(k, (spentByMonth.get(k) || 0) + ch.amount);
@@ -94,9 +100,11 @@ async function detectBills(userId, now = new Date(), { t = (s, v) => (v ? s.repl
     if (active && daysToDue >= 0 && daysToDue <= 7)
       flags.push({ type: 'due', text: daysToDue === 1 ? t('Due in 1 day') : t('Due in {n} days', { n: daysToDue }) });
     bills.push({
+      key,
       merchant: last.merchant,
       category: last.category,
-      monthly: r2(median(amounts.slice(-3))),
+      monthly: rule ? rule.monthly : r2(median(amounts.slice(-3))),
+      edited: Boolean(rule),
       lastAmount: r2(last.amount),
       typical: r2(typical),
       lastDate: last.date,
@@ -106,6 +114,38 @@ async function detectBills(userId, now = new Date(), { t = (s, v) => (v ? s.repl
       varies: spread >= 0.05,
       active,
       flags,
+    });
+  }
+  // Fixed costs the user set that detection didn't find (rent paid in cash, a new contract): always active,
+  // due on their day of the month. If nothing was paid to them lately, they aren't in the transactions at all.
+  const found = new Set(bills.map((b) => b.key));
+  for (const rule of rules.filter((r) => r.fixed && !found.has(r.key))) {
+    let nextDue = null;
+    let daysToDue = null;
+    if (rule.day) {
+      const on = (y, m) => new Date(y, m, Math.min(rule.day, new Date(y, m + 1, 0).getDate()));
+      nextDue = on(now.getFullYear(), now.getMonth());
+      if (nextDue < new Date(now.getFullYear(), now.getMonth(), now.getDate())) nextDue = on(now.getFullYear(), now.getMonth() + 1);
+      daysToDue = Math.ceil((nextDue - now) / DAY_MS);
+    }
+    const paid = (byMerchant.get(rule.key) || []).filter((c) => now - c.date <= STALE_DAYS * DAY_MS);
+    bills.push({
+      key: rule.key,
+      merchant: rule.merchant,
+      category: rule.category || 'Other',
+      monthly: rule.monthly,
+      lastAmount: rule.monthly,
+      typical: rule.monthly,
+      lastDate: paid.at(-1)?.date || null,
+      nextDue,
+      daysToDue,
+      charges: paid.length,
+      varies: false,
+      active: true,
+      manual: true,
+      day: rule.day,
+      unrecorded: !paid.length,
+      flags: daysToDue != null && daysToDue <= 7 ? [{ type: 'due', text: daysToDue === 1 ? t('Due in 1 day') : t('Due in {n} days', { n: daysToDue }) }] : [],
     });
   }
   bills.sort((a, b) => b.active - a.active || b.monthly - a.monthly);
@@ -184,6 +224,10 @@ async function detectBills(userId, now = new Date(), { t = (s, v) => (v ? s.repl
     byCategory,
     upcoming: active.filter((b) => b.daysToDue != null && b.daysToDue <= 30).sort((a, b) => a.daysToDue - b.daysToDue),
     insights,
+    // merchants the user says are never fixed (display names)
+    excluded: rules.filter((r) => !r.fixed).map((r) => r.merchant),
+    // hand-set fixed costs with no payments in the data: money out that cash-flow sums can't see
+    unrecordedMonthly: r2(active.filter((b) => b.unrecorded).reduce((a, b) => a + b.monthly, 0)),
   };
 }
 
@@ -191,10 +235,15 @@ exports.detectBills = detectBills;
 
 // Fixed costs are kept apart from everyday spending (heatmap, day-by-day chart): a transaction is fixed if
 // its category is a fixed-cost one, or its merchant is a detected recurring bill (e.g. a variable electricity bill).
+// Merchants the user marked "not fixed" never are, whatever their category.
 const FIXED_CATEGORIES = new Set(['Rent', 'Mortgage', 'Utilities', 'Insurance', 'Phone', 'Childcare', 'Subscriptions']);
-function fixedClassifier(bills) {
+function fixedClassifier(bills, excluded = []) {
   const names = new Set(bills.map((b) => b.merchant.trim().toLowerCase()));
-  return (t) => FIXED_CATEGORIES.has(t.category) || names.has(t.merchant.trim().toLowerCase());
+  const never = new Set(excluded.map((m) => m.trim().toLowerCase()));
+  return (t) => {
+    const key = t.merchant.trim().toLowerCase();
+    return !never.has(key) && (FIXED_CATEGORIES.has(t.category) || names.has(key));
+  };
 }
 exports.FIXED_CATEGORIES = FIXED_CATEGORIES;
 exports.OVERLAP_GROUPS = OVERLAP_GROUPS;
@@ -202,9 +251,9 @@ exports.fixedClassifier = fixedClassifier;
 
 // Merged spending history (imported transactions, bills, the user's own entries), newest first.
 // The latest charge of each active recurring bill carries its next due date and any price flags.
-function spendingHistory(rows, bills) {
+function spendingHistory(rows, bills, excluded) {
   const billByName = new Map(bills.map((b) => [b.merchant.trim().toLowerCase(), b]));
-  const isFixed = fixedClassifier(bills);
+  const isFixed = fixedClassifier(bills, excluded);
   const seenBill = new Set();
   return rows.map((t) => {
     const key = t.merchant.trim().toLowerCase();
@@ -240,6 +289,53 @@ function percentages(values) {
 }
 exports._percentages = percentages;
 
+// Categories a hand-set fixed cost can have.
+const FIXED_COST_CATEGORIES = [...FIXED_CATEGORIES, 'Transport', 'Education', 'Other'];
+exports.FIXED_COST_CATEGORIES = FIXED_COST_CATEGORIES;
+const MONEY = /^\d{1,7}(\.\d{1,2})?$/;
+
+// The user's corrections to fixed costs, one form for all three:
+//  save    -> fixed, at this amount a month (a detected bill's amount, or a new one added by hand)
+//  exclude -> this merchant is not a fixed cost
+//  reset   -> forget the correction; detection decides again (a hand-added cost goes away)
+exports.postFixedCost = async (req, res, next) => {
+  const back = '/finance/bills#fixed';
+  const merchant = String(req.body.merchant || '').trim();
+  const key = merchant.toLowerCase();
+  const { action } = req.body;
+  let problem = null;
+  if (!merchant || merchant.length > 60) problem = 'Give the fixed cost a name (up to 60 characters).';
+  else if (!['save', 'exclude', 'reset'].includes(action)) problem = 'Something went wrong.';
+  else if (action === 'save') {
+    const amount = String(req.body.amount || '').trim();
+    const day = String(req.body.day || '').trim();
+    if (!MONEY.test(amount) || !(Number(amount) > 0)) problem = 'Enter an amount greater than 0, with at most two decimals.';
+    else if (!FIXED_COST_CATEGORIES.includes(req.body.category)) problem = 'Pick a category.';
+    else if (day && !(/^\d{1,2}$/.test(day) && Number(day) >= 1 && Number(day) <= 31)) problem = 'Day of the month must be between 1 and 31.';
+  }
+  if (problem) {
+    req.flash('errors', { msg: problem });
+    return res.redirect(back);
+  }
+  try {
+    const where = { user: req.user._id, key };
+    if (action === 'reset') await FixedCost.deleteOne(where);
+    else if (action === 'exclude') await FixedCost.findOneAndUpdate(where, { merchant, fixed: false, $unset: { monthly: 1, day: 1 } }, { upsert: true });
+    else {
+      const set = { merchant, fixed: true, monthly: Number(req.body.amount), category: req.body.category };
+      await FixedCost.findOneAndUpdate(where, req.body.day ? { ...set, day: Number(req.body.day) } : { ...set, $unset: { day: 1 } }, { upsert: true });
+    }
+    await AgentAction.logUser(req.user._id, 'fixed_cost', { action, merchant, amount: Number(req.body.amount) || null });
+    const msg = { save: 'Fixed cost saved: {name}', exclude: '{name} no longer counts as a fixed cost.', reset: '{name} is back to automatic detection.' }[
+      action
+    ];
+    req.flash('success', { msg: req.t(msg, { name: merchant }) });
+    res.redirect(back);
+  } catch (error) {
+    next(error);
+  }
+};
+
 exports.getBills = async (req, res, next) => {
   try {
     const data = await detectBills(req.user._id, new Date(), { t: req.t });
@@ -250,7 +346,7 @@ exports.getBills = async (req, res, next) => {
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const rows = await Transaction.find({ user: req.user._id, date: { $gte: prevStart, $lte: now } }).lean();
-    const isFixed = fixedClassifier(data.bills);
+    const isFixed = fixedClassifier(data.bills, data.excluded);
     const today = now.getDate();
     const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
     const prevDays = new Date(now.getFullYear(), now.getMonth(), 0).getDate();
@@ -302,6 +398,10 @@ exports.getBills = async (req, res, next) => {
       lastMonthName,
       categories,
       fixedMonthly: data.monthlyTotal,
+      fixedBills: data.bills.filter((b) => b.active),
+      fixedExcluded: data.excluded,
+      fixedCategories: FIXED_COST_CATEGORIES,
+      currencySymbol: fmt.formatToParts(0).find((p) => p.type === 'currency')?.value || '',
       recommendations,
       alerts,
     });

@@ -178,16 +178,19 @@ describe('Auth & route protection', () => {
     expect([59, 1111111109, 20000000000].map((s) => _hotp(key, Math.floor(s / 30), 8))).to.deep.equal(['94287082', '07081804', '65353130']);
   });
 
-  it('deleting the account removes the user and their transactions', async () => {
+  it('deleting the account removes the user, their transactions and fixed-cost corrections', async () => {
     const agent = request.agent(app);
     let csrf = csrfOf((await agent.get('/login')).text);
     await agent.post('/login').type('form').send({ _csrf: csrf, email: 'ada@example.com', password: 'correct-horse' }).expect(302);
     const user = await User.findOne({ email: 'ada@example.com' });
     await Transaction.create({ user: user._id, date: new Date(), amount: -5, merchant: 'Cafe', category: 'DiningOut' });
+    const FixedCost = require('../models/FixedCost');
+    await FixedCost.create({ user: user._id, merchant: 'Rent', key: 'rent', fixed: true, monthly: 800, category: 'Rent' });
     csrf = csrfOf((await agent.get('/account')).text);
     await agent.post('/account/delete').type('form').send({ _csrf: csrf }).expect(302);
     expect(await User.exists({ _id: user._id })).to.equal(null);
     expect(await Transaction.countDocuments({ user: user._id })).to.equal(0);
+    expect(await FixedCost.countDocuments({ user: user._id })).to.equal(0);
   });
 
   describe('Record tab (card-style bookkeeping)', () => {
@@ -262,6 +265,20 @@ describe('Auth & route protection', () => {
         category: 'Other',
         source: 'manual',
       });
+      // edit: same rules as a new entry, own manual/scan entries only
+      const edit = (t, body) =>
+        agent
+          .post(`/finance/record/${t._id}`)
+          .type('form')
+          .send({ _csrf: csrf, ...body })
+          .expect(302);
+      await edit(mine, { category: 'Groceries', amount: '7.5', note: 'Corner shop' });
+      expect(await Transaction.findById(mine._id).lean()).to.include({ category: 'Groceries', amount: -7.5, merchant: 'Corner shop' });
+      await edit(mine, { category: 'Groceries', amount: '-1' }); // invalid: unchanged
+      expect((await Transaction.findById(mine._id)).amount).to.equal(-7.5);
+      for (const t of [imported, other]) await edit(t, { category: 'Other', amount: '1' });
+      expect((await Transaction.findById(imported._id)).amount).to.equal(-9);
+      expect((await Transaction.findById(other._id)).amount).to.equal(-3);
       for (const t of [mine, imported, other]) await agent.post(`/finance/record/${t._id}/delete`).type('form').send({ _csrf: csrf }).expect(302);
       expect(await Transaction.exists({ _id: mine._id })).to.equal(null);
       expect(await Transaction.exists({ _id: imported._id })).to.not.equal(null);
@@ -405,6 +422,31 @@ describe('Auth & route protection', () => {
       expect(page.text).to.not.include('mixdonut');
     });
 
+    it('Fixed costs: add by hand, correct, mark as not fixed, undo; per user', async () => {
+      const FixedCost = require('../models/FixedCost');
+      const post = (body) =>
+        agent
+          .post('/finance/fixed')
+          .type('form')
+          .send({ _csrf: csrf, ...body })
+          .expect(302)
+          .expect('Location', '/finance/bills#fixed');
+      await post({ action: 'save', merchant: 'Landlord', category: 'Rent', amount: '800', day: '1' });
+      let page = await agent.get('/finance/bills').expect(200);
+      expect(page.text).to.include('id="fixed"').and.include('Landlord').and.include('value="800.00"');
+      await post({ action: 'save', merchant: 'Landlord', category: 'Rent', amount: 'lots' }); // invalid: unchanged
+      expect((await FixedCost.findOne({ user: user._id, key: 'landlord' })).monthly).to.equal(800);
+      await post({ action: 'exclude', merchant: 'Landlord' });
+      expect(await FixedCost.findOne({ user: user._id, key: 'landlord' })).to.include({ fixed: false });
+      page = await agent.get('/finance/bills').expect(200);
+      expect(page.text).to.include('Not counted as fixed:');
+      await post({ action: 'reset', merchant: 'Landlord' });
+      expect(await FixedCost.exists({ user: user._id })).to.equal(null);
+      // stored per user: another user's correction never shows up
+      await FixedCost.create({ user: new mongoose.Types.ObjectId(), merchant: 'Secret rent', key: 'secret rent', fixed: true, monthly: 5, category: 'Rent' });
+      expect((await agent.get('/finance/bills').expect(200)).text).to.not.include('Secret rent');
+    });
+
     it('Goals: create, add, cap take-outs at what is saved, protect from other users, delete', async () => {
       const SavingsGoal = require('../models/SavingsGoal');
       const future = new Date(Date.now() + 90 * 864e5).toISOString().slice(0, 10);
@@ -413,13 +455,17 @@ describe('Auth & route protection', () => {
       expect(g.saved).to.equal(100);
       const add = (direction, amount) => agent.post(`/finance/goals/${g._id}/contribute`).type('form').send({ _csrf: csrf, direction, amount }).expect(302);
       await add('add', '400');
+      // only the jar money just went into animates: it knows its level before (6%) and what was added; once only
+      expect((await agent.get('/finance/goals').expect(200)).text)
+        .to.include('data-from="6"')
+        .and.include('data-added="+£400"');
       await add('take', '9999'); // more than saved: refused
       await add('take', '50');
       expect((await SavingsGoal.findById(g._id)).saved).to.equal(450);
       const page = await agent.get('/finance/goals').expect(200);
       expect(page.text).to.include('Tokyo trip').and.include('class="jar"').and.include('data-pct="30"').and.include('a week');
-      // only the jar money just went into animates: it knows its level before (6%) and what was added; once only
-      expect(page.text).to.include('data-from="6"').and.include('data-added="+£400"');
+      // taking out animates too: money flies out from the level before (33%)
+      expect(page.text).to.include('data-from="33"').and.include('data-added="−£50"');
       expect((await agent.get('/finance/goals').expect(200)).text).to.not.include('data-from');
       // invalid goals are rejected
       await agent.post('/finance/goals').type('form').send({ _csrf: csrf, name: 'Past', target: '10', deadline: '2020-01-01' }).expect(302);

@@ -44,21 +44,25 @@ block content
         else
           p.text-muted.small= t('No everyday spending yet this month')
         if fixedMonthly
-          p.cat-fixed= t('Plus {amount} a month in fixed bills, kept apart', { amount: money0(fixedMonthly) })
+          a.cat-fixed.d-block(href='#fixed')= t('Plus {amount} a month in fixed bills, kept apart', { amount: money0(fixedMonthly) })
 
     if recommendations.length || alerts.length
       .ins-card.ins-recs.mt-4
         h2= t("What I'd do next")
+        - const yearly = recommendations.reduce((a, r) => a + (r.saving || 0), 0);
+        if yearly
+          p.rec-total= t('Acting on these could keep about {amount} a year.', { amount: money0(yearly) })
         ol.rec-items
           each r in recommendations
             li(class=`sev-${r.severity}`)
               .rec-main
                 span.ins-tag(class=r.severity === 'warning' ? 'hero' : r.severity === 'tip' ? 'ghost' : '')= sevTag[r.severity]
                 h3= r.title
-                p.rec-action
-                  = r.action
-                  a.rec-ask.ms-2(href=`/finance?q=${encodeURIComponent(r.ask)}`, title=r.ask, aria-label=t('Ask {app}: “{q}”', { app: appName, q: r.ask }))
-                    i.fas.fa-arrow-right
+                p.rec-evidence= r.evidence
+                p.rec-action= r.action
+                a.rec-ask(href=`/finance?q=${encodeURIComponent(r.ask)}`, title=r.ask, aria-label=t('Ask {app}: “{q}”', { app: appName, q: r.ask }))
+                  = r.cta || t('Ask {app}', { app: appName })
+                  i.fas.fa-arrow-right.ms-1
               if r.savingLabel
                 .rec-saving
                   b.num= r.savingLabel
@@ -69,6 +73,66 @@ block content
                 span.ins-tag.ghost= t('BILLS')
                 h3= a.title
                 p.rec-action= a.text
+
+    //- Fixed costs: found from the payments, corrected by the user (controllers/bills.js postFixedCost)
+    section#fixed.ins-card.mt-4
+      .fx-head
+        h2= t('Fixed costs each month')
+        b.num= money0(fixedMonthly)
+      p.fx-note= t("Found from your payments. Correct an amount, mark something as not fixed, or add one the data can't see, like rent paid in cash.")
+      ul.fx-rows
+        each b in fixedBills
+          li
+            .fx-name
+              b= b.merchant
+              span
+                = cat(b.category)
+                if b.manual
+                  |  · #{ t('Added by you') }
+                else if b.edited
+                  |  · #{ t('Amount set by you') }
+            form.fx-form(method='POST', action='/finance/fixed')
+              input(type='hidden', name='_csrf', value=_csrf)
+              input(type='hidden', name='merchant', value=b.merchant)
+              input(type='hidden', name='category', value=fixedCategories.includes(b.category) ? b.category : 'Other')
+              if b.day
+                input(type='hidden', name='day', value=b.day)
+              label.budget-input
+                span.cur= currencySymbol
+                input(type='text', inputmode='decimal', name='amount', value=b.monthly.toFixed(2), required, pattern='\\d{1,7}(\\.\\d{1,2})?', aria-label=t('{name} a month', { name: b.merchant }))
+              button.btn.btn-ghost.btn-sm(type='submit', name='action', value='save')= t('Save')
+              if b.manual
+                button.btn.btn-ghost.btn-sm(type='submit', name='action', value='reset', formnovalidate)= t('Remove')
+              else
+                if b.edited
+                  button.btn.btn-ghost.btn-sm(type='submit', name='action', value='reset', formnovalidate, title=t('Use the detected amount again'))= t('Undo')
+                button.btn.btn-ghost.btn-sm(type='submit', name='action', value='exclude', formnovalidate)= t('Not fixed')
+        else
+          li.fx-empty= t('No fixed costs found yet.')
+      if fixedExcluded.length
+        .fx-excluded
+          span= t('Not counted as fixed:')
+          each m in fixedExcluded
+            form(method='POST', action='/finance/fixed')
+              input(type='hidden', name='_csrf', value=_csrf)
+              input(type='hidden', name='merchant', value=m)
+              button.chip(type='submit', name='action', value='reset', title=t('Count {name} as fixed again if it is a bill', { name: m }))
+                = m
+                i.fas.fa-rotate-left.ms-2
+      form.fx-add(method='POST', action='/finance/fixed', autocomplete='off')
+        input(type='hidden', name='_csrf', value=_csrf)
+        input(type='hidden', name='action', value='save')
+        input.form-control(type='text', name='merchant', required, maxlength='60', placeholder=t('Name, e.g. Rent'), aria-label=t('Name'))
+        select.form-select(name='category', aria-label=t('Category'))
+          each c in fixedCategories
+            option(value=c)= cat(c)
+        label.budget-input
+          span.cur= currencySymbol
+          input(type='text', inputmode='decimal', name='amount', required, pattern='\\d{1,7}(\\.\\d{1,2})?', placeholder='0.00', aria-label=t('Amount a month'))
+        input.form-control(type='number', name='day', min='1', max='31', placeholder=t('Due day'), aria-label=t('Day of the month it is due (optional)'))
+        button.btn.btn-danger.btn-sm(type='submit')
+          i.fas.fa-plus.me-1
+          = t('Add fixed cost')
 
 block scripts
   script#bills-data(type='application/json')!= JSON.stringify(chartData).replace(/</g, '\\u003c')
