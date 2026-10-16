@@ -13,10 +13,10 @@ FinTechathon 2026 International Track, Topic A. Deadline: **20 October 2026, 23:
 
 ## Before submitting
 
-- [ ] Run `npm test`, `npm run evidence` and `npm run test-cases` once more and commit the regenerated files.
+- [x] Run `npm test`, `npm run evidence` and `npm run test-cases` once more and commit the regenerated files.
 - [x] Operation log from the video recording downloaded and submitted with the entry.
 - [x] Repository visibility: public.
 - [x] Licence: MIT ([LICENSE](../LICENSE)).
-- [ ] Every document and the video in English.
-- [ ] Team registered; team composition meets the rules (2–5 members, at least 60% non-Chinese nationals, enrolled at overseas universities).
-- [ ] Decide who attends the final in Shenzhen (21–23 November 2026); at least one member in person.
+- [x] Every document and the video in English.
+- [x] Team registered; team composition meets the rules (2–5 members, at least 60% non-Chinese nationals, enrolled at overseas universities).
+- [x] Decide who attends the final in Shenzhen (21–23 November 2026); at least one member in person.
