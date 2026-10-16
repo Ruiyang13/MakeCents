@@ -34,7 +34,7 @@ const app = express();
 const secure = (process.env.BASE_URL || '').startsWith('https');
 const limit = (windowMin, max) => rateLimit({ windowMs: windowMin * 60 * 1000, max, standardHeaders: true, legacyHeaders: false });
 
-app.locals.appName = process.env.APP_NAME || 'PlanSmart';
+app.locals.appName = process.env.APP_NAME || 'MakeCents';
 // English defaults for pages rendered before the i18n middleware (early errors); overridden per request.
 Object.assign(app.locals, { lang: 'en', t: i18n.makeT('en'), cat: (k) => i18n.catName('en', k), dateLocale: 'en-GB', i18nClient: '{}' });
 app.locals.v = Date.now().toString(36); // cache-buster for our own CSS/JS, changes on each restart
@@ -75,7 +75,7 @@ app.use(express.urlencoded({ extended: false }));
 app.use(limit(15, 300));
 app.use(
   session({
-    name: 'plansmart.sid',
+    name: 'makecents.sid',
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,

@@ -28,7 +28,7 @@ describe('Auth & route protection', () => {
 
   it('serves the landing page', async () => {
     const res = await request(app).get('/').expect(200);
-    expect(res.text).to.include('PlanSmart');
+    expect(res.text).to.include('MakeCents');
   });
 
   it('sends a nonce-based CSP, and every inline script carries the nonce', async () => {
@@ -238,7 +238,7 @@ describe('Auth & route protection', () => {
         .get('/finance/audit/export?format=csv')
         .expect(200)
         .expect('Content-Type', /text\/csv/);
-      expect(csv.headers['content-disposition']).to.match(/attachment; filename="plansmart-operation-log-\d{4}-\d{2}-\d{2}\.csv"/);
+      expect(csv.headers['content-disposition']).to.match(/attachment; filename="makecents-operation-log-\d{4}-\d{2}-\d{2}\.csv"/);
       expect(csv.text).to.include('"user","record_entry","executed"');
       const json = await agent.get('/finance/audit/export?format=json').expect(200);
       expect(json.body.find((r) => r.action === 'record_entry' && r.args.merchant === 'Log check')).to.include({ tier: 'user', status: 'executed' });

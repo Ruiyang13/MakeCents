@@ -605,7 +605,7 @@ function buildTools(userId, t = (s, v) => (v ? s.replace(/\{(\w+)\}/g, (m, k) =>
 
 exports._buildTools = buildTools; // exported for scripts/check-finance-tools.js
 
-const SYSTEM_PROMPT = `You are PlanSmart, a personal finance assistant. You help the user understand their spending, budget, and cash flow using ONLY the data returned by your tools.
+const SYSTEM_PROMPT = `You are MakeCents, a personal finance assistant. You help the user understand their spending, budget, and cash flow using ONLY the data returned by your tools.
 
 Understanding the user:
 - People write casually, vaguely, with typos, or in Chinese or mixed languages. Work out what they most likely mean and answer that. Map everyday words to the exact category names listed under "Your data" (e.g. "eating out", "restaurants", "吃饭" -> DiningOut; "food shopping", "买菜" -> Groceries).
@@ -967,7 +967,7 @@ exports.getFinanceAuditExport = async (req, res, next) => {
     const rows = await auditRows(req.user._id);
     const json = req.query.format === 'json';
     const day = new Date().toISOString().slice(0, 10);
-    res.attachment(`plansmart-operation-log-${day}.${json ? 'json' : 'csv'}`);
+    res.attachment(`makecents-operation-log-${day}.${json ? 'json' : 'csv'}`);
     if (json) return res.json(rows);
     res.type('text/csv').send(`\uFEFF${auditCsv(rows)}`); // BOM so Excel reads UTF-8 (Chinese text)
   } catch (error) {

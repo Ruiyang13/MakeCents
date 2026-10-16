@@ -1,4 +1,4 @@
-# PlanSmart
+# MakeCents
 
 AI personal finance assistant (FinTechathon 2026 International Track, Topic A: Personal Finance Assistant).
 It reads a user's transactions, explains where the money goes, helps set budgets and savings goals, and warns
@@ -48,7 +48,7 @@ Never commit `.env` (it holds the API key); it is in `.gitignore`.
 
 ## Run with Docker
 
-Requires Docker with Compose. Runs PlanSmart and MongoDB together, in production mode.
+Requires Docker with Compose. Runs MakeCents and MongoDB together, in production mode.
 
 ```bash
 cp .env.example .env      # set SESSION_SECRET (required) and ANTHROPIC_API_KEY (for chat and receipt reading)

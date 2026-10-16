@@ -1,10 +1,10 @@
-# PlanSmart: Technical Documentation
+# MakeCents: Technical Documentation
 
 FinTechathon 2026 · International Track · Topic A (Personal Finance Assistant)
 
 **Team:** Yang Zhuo, Du Ruiyang, Mo Hanqi, Lin Haoyang
 
-PlanSmart is a personal finance assistant built around an AI agent (Claude) that works on the user's own
+MakeCents is a personal finance assistant built around an AI agent (Claude) that works on the user's own
 transaction data. It answers questions in plain English or Chinese, finds recurring bills and savings
 opportunities, plans savings goals, reads receipts and payment screenshots, and proposes changes
 (budgets, new records, and money movements inside a simulated sandbox account) that the user approves before
@@ -39,7 +39,7 @@ flowchart LR
     C -- "receipt image (structured output)" --> LLM
 ```
 
-PlanSmart is a server-rendered web app. The server is the only component that talks to the database
+MakeCents is a server-rendered web app. The server is the only component that talks to the database
 and to the Anthropic API; the browser never holds an API key and never queries data directly.
 
 ### 1.2 Technology stack

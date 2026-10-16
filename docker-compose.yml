@@ -1,4 +1,4 @@
-# One command runs PlanSmart and MongoDB:  docker compose up --build
+# One command runs MakeCents and MongoDB:  docker compose up --build
 # Needs SESSION_SECRET (and ANTHROPIC_API_KEY for chat and receipt reading) in .env next to this file.
 # Demo data:  docker compose run --rm app node scripts/seed-transactions.js
 services:
